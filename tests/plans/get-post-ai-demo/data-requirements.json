@@ -1,0 +1,13 @@
+{
+  "schema_version": "1.0",
+  "scenario": "get-post-ai-demo",
+  "status": "APPROVED",
+  "data_strategy": "NONE_OR_PARAMETERIZED",
+  "requirements": {
+    "parameters": [],
+    "uniqueness_required": false,
+    "cleanup_required": false,
+    "preconditions": [],
+    "open_questions": []
+  }
+}

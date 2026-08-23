@@ -1,0 +1,70 @@
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Poetry / virtual environments
+.venv/
+venv/
+env/
+
+# IDEs
+.vscode/
+.idea/
+
+# Local secrets / environment
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+
+# Gemini local auth/state
+.gemini/settings.json
+.gemini/google_accounts.json
+.gemini/state.json
+.gemini/projects.json
+.gemini/installation_id
+.gemini/trustedFolders.json
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.bak
+*.backup
+*.backup-*
+*.pre-approval
+
+# Archive
+archive/
+
+# Runtime evidence
+results/
+reports/
+
+# Generated JMX
+tests/generated/*.jmx
+
+# Keep directories
+!tests/generated/.gitkeep
+!results/.gitkeep
+!reports/.gitkeep
+
+# Runtime history
+history/history.json
+
+# Generated JMX metadata
+tests/generated/*.jmx.meta.json

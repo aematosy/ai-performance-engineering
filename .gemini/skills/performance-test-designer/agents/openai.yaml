@@ -1,0 +1,3 @@
+interface:
+  display_name: "Performance Test Designer"
+  short_description: "Diseña, revisa y prepara planes JMeter con gates humanos."

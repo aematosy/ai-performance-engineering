@@ -1,0 +1,48 @@
+{
+  "schema_version": "1.0",
+  "scenario": "create-post-demo",
+  "status": "APPROVED",
+  "data_strategy": "SYNTHETIC_OR_PARAMETERIZED",
+  "requirements": {
+    "parameters": [
+      {
+        "name": "title",
+        "type": "string",
+        "required": true,
+        "strategy": "Synthetic or parameterized text. Recommended length range: 10 to 30 characters.",
+        "example": "performance test abc12",
+        "sensitive": false
+      },
+      {
+        "name": "body",
+        "type": "string",
+        "required": true,
+        "strategy": "Synthetic or parameterized text. Recommended length range: 30 to 100 characters.",
+        "example": "AI-assisted performance engineering demo",
+        "sensitive": false
+      },
+      {
+        "name": "userId",
+        "type": "integer",
+        "required": true,
+        "strategy": "Use a synthetic or approved integer value. Do not assume production identity semantics.",
+        "example": 1,
+        "sensitive": false
+      }
+    ],
+    "uniqueness_required": false,
+    "collision_risk": "LOW",
+    "collision_description": "No persistent record locking is expected for this demo scenario, but the result must not be generalized to systems with real persistence.",
+    "cleanup_required": false,
+    "cleanup_description": "No cleanup is required for the current demo endpoint because the scenario is not treated as persistent storage benchmarking.",
+    "preconditions": [
+      "jsonplaceholder.typicode.com must be reachable from the test injector.",
+      "The execution must remain authorized and low intensity.",
+      "No sensitive or production data may be used."
+    ],
+    "open_questions": [
+      "Should a CSV file be used instead of runtime-generated values for the final demo?",
+      "Does the final target require data uniqueness or cleanup when migrated to a real service?"
+    ]
+  }
+}

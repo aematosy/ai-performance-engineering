@@ -1,0 +1,233 @@
+version: "1.0"
+
+project:
+  name: "AI Performance Engineering Platform"
+  language: "es"
+  timezone: "America/Lima"
+  encoding: "UTF-8"
+
+runtime:
+  python_command: "python3"
+  jmeter_command: "jmeter"
+  docker_command: "docker"
+  docker_compose_command: "docker compose"
+  gemini_command: "gemini"
+
+paths:
+  config_directory: "config"
+  scripts_directory: "scripts"
+  tests_directory: "tests"
+  generated_jmx_directory: "tests/generated"
+  results_directory: "results"
+  reports_directory: "reports"
+  history_directory: "history"
+  knowledge_directory: "knowledge"
+  grafana_directory: "grafana"
+
+  files:
+    sla: "config/sla.json"
+    execution_policies: "config/execution-policies.yaml"
+    agent_registry: "config/agent-registry.yaml"
+    history_index: "history/history.json"
+    grafana_dashboard: "grafana/dashboards/performance-dashboard.json"
+    docker_compose: "docker-compose.yml"
+
+scripts:
+  validate_environment:
+    path: "scripts/validate_environment.py"
+    enabled: true
+
+  generate_jmx:
+    path: "scripts/generate_jmx.py"
+    enabled: true
+
+  run_test:
+    path: "scripts/run_test.py"
+    enabled: true
+
+  analyze_results:
+    path: "scripts/analyze_results.py"
+    enabled: true
+
+  generate_report:
+    path: "scripts/generate_report.py"
+    enabled: true
+
+  history_manager:
+    path: "scripts/history_manager.py"
+    enabled: true
+
+  trend_analyzer:
+    path: "scripts/trend_analyzer.py"
+    enabled: true
+
+  intelligence_engine:
+    path: "scripts/intelligence_engine.py"
+    enabled: true
+
+  review_test_plan:
+    path: "scripts/review_test_plan.py"
+    enabled: true
+
+  validate_test_plan:
+    path: "scripts/validate_test_plan.py"
+    enabled: true
+
+  approve_test_plan:
+    path: "scripts/approve_test_plan.py"
+    enabled: true
+
+  generate_jmx_from_plan:
+    path: "scripts/generate_jmx_from_plan.py"
+    enabled: true
+
+observability:
+  enabled: true
+
+  prometheus:
+    enabled: true
+    base_url: "http://localhost:9090"
+    readiness_endpoint: "/-/ready"
+    targets_endpoint: "/targets"
+    jmeter_job_name: "jmeter"
+
+  grafana:
+    enabled: true
+    base_url: "http://localhost:3000"
+    health_endpoint: "/api/health"
+    datasource_uid: "prometheus"
+
+  jmeter_metrics:
+    enabled: true
+    host: "localhost"
+    port: 9270
+    endpoint: "/metrics"
+
+execution:
+  require_authorization: true
+  require_environment: true
+  require_target: true
+  require_users: true
+  require_ramp_up: true
+  require_duration: true
+  require_sla: true
+
+  authorized_flag: "--authorized"
+  jmeter_mode: "non-gui"
+
+  defaults:
+    environment: "demo"
+    threads: 10
+    ramp_time_seconds: 10
+    duration_seconds: 60
+    expected_http_status: 200
+    output_format: "csv"
+    generate_jmeter_dashboard: true
+    generate_executive_report: true
+    start_observability: true
+
+  parameters:
+    users:
+      minimum: 1
+      maximum_without_confirmation: 100
+
+    ramp_up_seconds:
+      minimum: 1
+
+    duration_seconds:
+      minimum: 1
+
+evidence:
+  required:
+    - "test-plan.jmx"
+    - "results.jtl"
+    - "jmeter.log"
+    - "analysis.json"
+    - "metadata.json"
+    - "executive-report.html"
+
+  optional:
+    - "jmeter-dashboard"
+    - "grafana-snapshot"
+    - "prometheus-metrics"
+    - "trend.json"
+
+naming:
+  execution_directory_format: "%Y%m%d_%H%M%S_{scenario}"
+  execution_timestamp_format: "%Y%m%d_%H%M%S"
+  normalize_scenario_names: true
+  lowercase_paths: true
+  replace_spaces_with: "-"
+
+knowledge:
+  enabled: true
+  directory: "knowledge"
+  recursive: true
+
+  supported_extensions:
+    - ".md"
+    - ".txt"
+
+  priority_documents:
+    strategy: "knowledge/performance-testing-strategy.md"
+    jmeter: "knowledge/jmeter-best-practices.md"
+    sla_analysis: "knowledge/sla-and-analysis-guidelines.md"
+    observability: "knowledge/prometheus-grafana-guide.md"
+    troubleshooting: "knowledge/troubleshooting-guide.md"
+    glossary: "knowledge/glossary.md"
+
+logging:
+  level: "INFO"
+  timestamp_format: "%Y-%m-%dT%H:%M:%S%z"
+  include_command_output: true
+  include_stack_trace_on_error: true
+  redact_sensitive_values: true
+
+security:
+  allow_production_by_default: false
+  allow_embedded_secrets: false
+
+  redact_headers:
+    - "Authorization"
+    - "Proxy-Authorization"
+    - "X-API-Key"
+    - "Cookie"
+    - "Set-Cookie"
+
+  protected_environments:
+    - "production"
+    - "prod"
+
+  safe_demo_hosts:
+    - "localhost"
+    - "127.0.0.1"
+    - "jsonplaceholder.typicode.com"
+
+analytics:
+  trend:
+    stable_threshold_pct: 3.0
+    error_rate_stable_threshold_points: 0.10
+
+    improved_score_min: 20.0
+    degraded_score_max: -20.0
+
+    weights:
+      throughput: 0.30
+      p95: 0.30
+      p99: 0.20
+      error_rate: 0.20
+
+    critical:
+      p95_degradation_pct: 20.0
+      error_rate_increase_points: 1.0
+
+  intelligence:
+    warning_ratios:
+      p95: 0.80
+      p99: 0.80
+      error_rate: 0.80
+      throughput: 1.20
+
+    trend:
+      degraded_score_threshold: -20.0
+      severe_degradation_score_threshold: -60.0

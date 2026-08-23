@@ -1,0 +1,80 @@
+metadata:
+  name: get-post-ai-demo
+  version: '1.0'
+  description: Performance test for GET /posts/1 on jsonplaceholder.typicode.com
+  created_at: '2026-08-22'
+  author: Gemini CLI Performance Designer
+status: APPROVED
+objective: Baseline performance assessment for GET /posts/1
+system:
+  type: API
+  name: jsonplaceholder
+environment: demo
+target:
+  protocol: https
+  host: jsonplaceholder.typicode.com
+  port: 443
+  base_path: ''
+authentication:
+  type: NONE
+  description: Public API, no authentication required
+workload:
+  type: BASELINE
+  status: APPROVED
+  parameters:
+    threads: 2
+    ramp_time_seconds: 5
+    duration_seconds: 30
+    pacing_seconds: 1.0
+  description: 'Proposal based on formula: max(2, ceil(throughput * pacing * 1.5))'
+sla:
+  error_rate_threshold_pct: 1.0
+  p95_threshold_ms: 1000
+  p99_threshold_ms: 2000
+  min_throughput_req_per_sec: 1.0
+  source: config/sla.json
+data:
+  requirements_file: tests/plans/get-post-ai-demo/data-requirements.json
+  source_type: NONE_OR_PARAMETERIZED
+  fields: []
+transactions:
+- name: 01_GetPost
+  method: GET
+  path: /posts/1
+  headers:
+    Accept: application/json
+  expected_status: 200
+correlations:
+  description: None required.
+  extractors: []
+assertions:
+- type: RESPONSE_CODE
+  expected_value: '200'
+  description: Validate expected HTTP status.
+observability:
+  metrics:
+  - source: JMeter Prometheus Listener
+    endpoint: http://localhost:9270/metrics
+  - source: Prometheus
+    url: http://localhost:9090
+  - source: Grafana
+    url: http://localhost:3000
+  gaps:
+  - No server-side observability is available unless explicitly provided.
+risks:
+- category: Environment
+  description: Public demo API, unpredictable performance.
+  impact: MEDIUM
+  mitigation: Ensure baseline comparison is meaningful, consider result variance.
+authorization:
+  required: true
+  status: PENDING
+  authorized_by: null
+  authorized_at: null
+  notes: Execution requires explicit authorization.
+open_questions: []
+approval:
+  approved_by: Adrian Matos
+  approved_at: '2026-08-22T21:18:56.002704-05:00'
+  scope: DESIGN_AND_WORKLOAD
+  execution_authorized: false

@@ -1,0 +1,13 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: jmeter
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - host.docker.internal:9270
+        labels:
+          environment: demo
+          tool: jmeter

@@ -1,0 +1,3 @@
+interface:
+  display_name: "Performance Test Runner"
+  short_description: "Ejecuta JMeter con preflight, autorización y evidencia controlada."

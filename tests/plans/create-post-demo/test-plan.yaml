@@ -1,0 +1,106 @@
+metadata:
+  name: create-post-demo
+  version: '1.0'
+  description: Performance Test Plan for JSONPlaceholder posts creation API
+  created_at: '2026-08-22'
+  author: Gemini CLI Performance Designer
+status: APPROVED
+objective: Evaluar el comportamiento inicial del endpoint de creación de publicaciones bajo una carga simulada controlada, estableciendo una línea base técnica para posteriores comparaciones.
+system:
+  type: API
+  name: JSONPlaceholder API
+environment: demo
+target:
+  protocol: https
+  host: jsonplaceholder.typicode.com
+  port: 443
+  base_path: ''
+authentication:
+  type: NONE
+  description: Endpoint público compartido que no requiere autenticación en el entorno demo.
+workload:
+  type: BASELINE
+  status: APPROVED
+  parameters:
+    threads: 5
+    ramp_time_seconds: 10
+    duration_seconds: 60
+    pacing_seconds: 1.0
+  description: Carga propuesta únicamente para una línea base técnica inicial. Los valores requieren revisión y aprobación antes de ejecución.
+sla:
+  error_rate_threshold_pct: 1.0
+  p95_threshold_ms: 1000
+  p99_threshold_ms: 2000
+  min_throughput_req_per_sec: 1.0
+  source: config/sla.json
+data:
+  requirements_file: tests/plans/create-post-demo/data-requirements.json
+  source_type: PARAMETERIZED
+  fields:
+  - name: title
+    type: STRING
+    description: Título de la publicación
+  - name: body
+    type: STRING
+    description: Cuerpo o contenido de la publicación
+  - name: userId
+    type: INTEGER
+    description: Identificador del usuario creador
+transactions:
+- name: 01_CreatePost
+  method: POST
+  path: /posts
+  headers:
+    Content-Type: application/json
+  body: "{\n  \"title\": \"${title}\",\n  \"body\": \"${body}\",\n  \"userId\": ${userId}\n}\n"
+  expected_status: 201
+correlations:
+  description: No se requieren correlaciones de entrada obligatorias para disparar la transacción. Se documenta la extracción saliente del ID generado.
+  extractors:
+  - name: extracted_post_id
+    source_transaction: 01_CreatePost
+    type: JSON_PATH
+    expression: $.id
+    fallback: NOT_FOUND
+assertions:
+- type: RESPONSE_CODE
+  expected_value: '201'
+  description: Validar que la respuesta HTTP sea 201 Created.
+- type: JSON_PATH
+  expression: $.id
+  expected_value: .+
+  description: Validar que la respuesta contenga un ID autogenerado.
+observability:
+  metrics:
+  - source: JMeter Prometheus Listener
+    endpoint: http://localhost:9270/metrics
+  - source: Prometheus
+    url: http://localhost:9090
+  - source: Grafana
+    url: http://localhost:3000
+  gaps:
+  - No se dispone de observabilidad del lado del servidor de JSONPlaceholder, como CPU, memoria, I/O, base de datos o métricas internas de aplicación.
+risks:
+- category: RATE_LIMITING
+  description: JSONPlaceholder es un servicio público compartido. Una carga excesiva puede provocar bloqueos temporales por IP, HTTP 429, throttling o aumento de latencia.
+  impact: HIGH
+  mitigation: Mantener la prueba en baja escala y con pacing controlado hasta contar con autorización y límites explícitos del servicio.
+- category: FAKE_PERSISTENCE
+  description: Las publicaciones creadas en la demo no se persisten realmente en una base de datos física, por lo que la prueba no evalúa capacidad real de almacenamiento.
+  impact: MEDIUM
+  mitigation: Usar este escenario como validación técnica del flujo y línea base del endpoint, no como benchmark de persistencia real.
+authorization:
+  required: true
+  status: PENDING
+  authorized_by: null
+  authorized_at: null
+  notes: El plan permanece en estado DRAFT. No está autorizado para ejecución hasta recibir aprobación explícita.
+open_questions:
+- ¿Cuál es el volumen de carga real estimado en producción, por ejemplo TPS o concurrencia habitual?
+- ¿Existe algún endpoint privado equivalente con persistencia real para realizar pruebas de rendimiento exhaustivas?
+- ¿Dispone el equipo de un SLA específico para la latencia de creación de posts? Si no existe, definir uno antes de aprobar el plan.
+approval:
+  approved_by: Adrian Matos
+  approved_at: '2026-08-22T20:04:51.341534-05:00'
+  scope: DESIGN_AND_WORKLOAD
+  execution_authorized: false

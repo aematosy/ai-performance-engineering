@@ -1,0 +1,141 @@
+version: "1.0"
+
+agents:
+  chief-performance-engineer:
+    enabled: true
+    role: "orchestrator"
+    skill_path: ".gemini/skills/chief-performance-engineer/SKILL.md"
+    language: "es"
+    responsibilities:
+      - "coordinar el ciclo completo de Performance Engineering"
+      - "delegar en skills especializadas"
+      - "consolidar evidencia, riesgo, decision y siguientes acciones"
+    delegates_to:
+      - "performance-test-designer"
+      - "performance-test-runner"
+      - "performance-results-analyst"
+      - "performance-engineer"
+    deterministic_sources:
+      - "scripts/run_test.py"
+      - "scripts/analyze_results.py"
+      - "scripts/history_manager.py"
+      - "scripts/trend_analyzer.py"
+      - "scripts/intelligence_engine.py"
+
+  performance-test-designer:
+    enabled: true
+    role: "designer"
+    skill_path: ".gemini/skills/performance-test-designer/SKILL.md"
+    language: "es"
+    responsibilities:
+      - "realizar discovery"
+      - "disenar workload"
+      - "identificar SLA, datos, correlaciones y observabilidad"
+      - "preparar Performance Test Plans"
+      - "generar o modificar JMX cuando corresponda"
+    must_not:
+      - "ejecutar pruebas de carga"
+      - "inventar autorizacion"
+      - "inventar workload productivo"
+      - "persistir secretos"
+
+  performance-test-runner:
+    enabled: true
+    role: "runner"
+    skill_path: ".gemini/skills/performance-test-runner/SKILL.md"
+    language: "es"
+    responsibilities:
+      - "validar el ambiente"
+      - "controlar ejecuciones autorizadas"
+      - "coordinar JMeter, Prometheus y Grafana"
+      - "preservar evidencias"
+    requires:
+      - "target"
+      - "environment"
+      - "authorization"
+      - "users"
+      - "ramp_up"
+      - "duration"
+      - "jmx_or_approved_plan"
+
+  performance-results-analyst:
+    enabled: true
+    role: "analyst"
+    skill_path: ".gemini/skills/performance-results-analyst/SKILL.md"
+    language: "es"
+    responsibilities:
+      - "interpretar analysis.json"
+      - "interpretar metadata.json"
+      - "interpretar trend.json"
+      - "interpretar intelligence.json"
+      - "formular hipotesis basadas en evidencia"
+      - "proponer la siguiente prueba"
+    deterministic_sources:
+      - "results/<execution-id>/analysis.json"
+      - "results/<execution-id>/metadata.json"
+      - "results/<execution-id>/trend.json"
+      - "results/<execution-id>/intelligence.json"
+
+  performance-engineer:
+    enabled: true
+    role: "specialist"
+    skill_path: ".gemini/skills/performance-engineer/SKILL.md"
+    language: "es"
+    responsibilities:
+      - "revision tecnica especializada"
+      - "JMeter"
+      - "workload"
+      - "capacidad"
+      - "escalabilidad"
+      - "observabilidad"
+      - "troubleshooting"
+      - "correlacion de metricas"
+
+routing:
+  default_agent: "chief-performance-engineer"
+
+  rules:
+    - intent: "design"
+      agent: "performance-test-designer"
+
+    - intent: "execute"
+      agent: "performance-test-runner"
+
+    - intent: "analyze"
+      agent: "performance-results-analyst"
+
+    - intent: "technical_review"
+      agent: "performance-engineer"
+
+    - intent: "end_to_end"
+      agent: "chief-performance-engineer"
+
+governance:
+  deterministic_evidence_is_source_of_truth: true
+  allow_ai_to_override_sla_verdict: false
+  allow_ai_to_override_trend: false
+  allow_ai_to_override_risk: false
+  allow_ai_to_override_decision: false
+
+  require_explicit_authorization_before_execution: true
+  require_explicit_production_authorization: true
+
+  redact_sensitive_values: true
+  prohibited_sensitive_fields:
+    - "Authorization"
+    - "Proxy-Authorization"
+    - "X-API-Key"
+    - "Cookie"
+    - "Set-Cookie"
+
+  hypothesis_confidence_levels:
+    - "LOW"
+    - "MEDIUM"
+    - "HIGH"
+
+artifacts:
+  results_directory: "results"
+  reports_directory: "reports"
+  history_file: "history/history.json"
+  generated_jmx_directory: "tests/generated"
+  future_test_plan_directory: "tests/plans"
