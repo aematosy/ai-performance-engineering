@@ -42,10 +42,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 5,
-        "w": 6,
         "x": 0,
-        "y": 0
+        "y": 0,
+        "w": 5,
+        "h": 5
       },
       "id": 1,
       "options": {
@@ -109,10 +109,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 5,
-        "w": 6,
-        "x": 6,
-        "y": 0
+        "x": 5,
+        "y": 0,
+        "w": 5,
+        "h": 5
       },
       "id": 2,
       "options": {
@@ -177,10 +177,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 5,
-        "w": 6,
-        "x": 12,
-        "y": 0
+        "x": 10,
+        "y": 0,
+        "w": 5,
+        "h": 5
       },
       "id": 3,
       "options": {
@@ -236,10 +236,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 5,
-        "w": 6,
-        "x": 18,
-        "y": 0
+        "x": 15,
+        "y": 0,
+        "w": 5,
+        "h": 5
       },
       "id": 4,
       "options": {
@@ -312,10 +312,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
-        "w": 12,
         "x": 0,
-        "y": 5
+        "y": 5,
+        "w": 8,
+        "h": 9
       },
       "id": 5,
       "options": {
@@ -401,10 +401,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 5
+        "x": 8,
+        "y": 5,
+        "w": 8,
+        "h": 9
       },
       "id": 6,
       "options": {
@@ -492,10 +492,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 7,
-        "w": 12,
-        "x": 0,
-        "y": 13
+        "x": 16,
+        "y": 5,
+        "w": 8,
+        "h": 9
       },
       "id": 7,
       "options": {
@@ -522,7 +522,7 @@
           "refId": "A"
         }
       ],
-      "title": "Virtual Users",
+      "title": "Virtual Users Over Time",
       "type": "timeseries",
       "description": "Evolución de usuarios virtuales por estado: started, active y finished."
     },
@@ -568,10 +568,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 7,
-        "w": 12,
-        "x": 12,
-        "y": 13
+        "x": 0,
+        "y": 14,
+        "w": 10,
+        "h": 8
       },
       "id": 8,
       "options": {
@@ -628,10 +628,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 4,
-        "w": 6,
-        "x": 0,
-        "y": 20
+        "x": 10,
+        "y": 14,
+        "w": 5,
+        "h": 8
       },
       "id": 9,
       "options": {
@@ -666,7 +666,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Estado del endpoint de métricas de JMeter visto por Prometheus.",
+      "description": "Estado actual del endpoint de métricas de JMeter. ACTIVE indica que una ejecución está exponiendo métricas. INACTIVE es normal cuando JMeter no está ejecutándose. Las métricas históricas permanecen almacenadas en Prometheus.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -674,19 +674,19 @@
           },
           "mappings": [
             {
+              "type": "value",
               "options": {
                 "0": {
-                  "color": "red",
-                  "index": 0,
-                  "text": "DOWN"
+                  "text": "INACTIVE",
+                  "color": "blue",
+                  "index": 0
                 },
                 "1": {
+                  "text": "ACTIVE",
                   "color": "green",
-                  "index": 1,
-                  "text": "UP"
+                  "index": 1
                 }
-              },
-              "type": "value"
+              }
             }
           ],
           "min": 0,
@@ -695,7 +695,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "red"
+                "color": "blue"
               },
               {
                 "color": "green",
@@ -708,10 +708,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 4,
-        "w": 6,
-        "x": 6,
-        "y": 20
+        "x": 20,
+        "y": 0,
+        "w": 4,
+        "h": 5
       },
       "id": 10,
       "options": {
@@ -738,8 +738,24 @@
           "refId": "A"
         }
       ],
-      "title": "JMeter Metrics Target",
+      "title": "JMeter Exporter Status",
       "type": "stat"
+    },
+    {
+      "id": 11,
+      "type": "text",
+      "title": "Información",
+      "description": "Ayuda para interpretar el estado live y las métricas históricas.",
+      "gridPos": {
+        "x": 15,
+        "y": 14,
+        "w": 9,
+        "h": 8
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "### Cómo interpretar este dashboard\n\n**Durante una ejecución**\n\nLos indicadores superiores muestran el estado actual de JMeter: throughput, latencia, errores y usuarios virtuales activos.\n\n**Después de finalizar**\n\nEs normal que el throughput y los usuarios activos vuelvan a cero y que **JMeter Exporter Status** muestre **INACTIVE**.\n\nEsto no significa que la prueba haya fallado. El exporter existe únicamente mientras JMeter está ejecutándose.\n\n**Análisis histórico**\n\nLos gráficos conservan las métricas recolectadas por Prometheus y permiten analizar posteriormente throughput, percentiles, usuarios y errores."
+      }
     }
   ],
   "refresh": "5s",
@@ -754,7 +770,7 @@
     "list": []
   },
   "time": {
-    "from": "now-15m",
+    "from": "now-1h",
     "to": "now"
   },
   "timepicker": {},
@@ -763,5 +779,5 @@
   "uid": "ai-performance-jmeter",
   "version": 2,
   "weekStart": "",
-  "description": "Dashboard en tiempo real para pruebas JMeter con métricas expuestas a Prometheus. Incluye throughput, percentiles, tasa de error y usuarios virtuales."
+  "description": "Dashboard operativo de pruebas de performance con JMeter, Prometheus y Grafana. Separa métricas live de análisis histórico."
 }

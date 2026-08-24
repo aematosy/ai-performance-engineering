@@ -1,6 +1,6 @@
 ---
 name: performance-test-runner
-description: Ejecuta de forma segura y controlada pruebas de rendimiento existentes con Apache JMeter y coordina Prometheus/Grafana. Usa esta skill para verificar plan y workload aprobados, validar que el JMX y su metadata coincidan exactamente con el plan, presentar el preflight, solicitar autorización humana explícita y ejecutar run_test.py sin alterar la carga aprobada.
+description: Ejecuta de forma segura y controlada pruebas de rendimiento existentes mediante el workflow público gobernado. Usa esta skill para verificar plan y workload aprobados, validar que el JMX y su metadata coincidan exactamente con el plan, ejecutar preflight, verificar que la autorización de ejecución ya esté registrada y ejecutar performance_workflow.py execute sin alterar la carga aprobada.
 ---
 
 # Performance Test Runner
@@ -75,13 +75,13 @@ La intención previa de ejecutar no reemplaza este gate.
 
 ## Ejecución
 
-Antes de solicitar autorización, usar `run_approved_plan.py --preflight` según el contract. Este wrapper toma target y workload directamente del plan y no acepta overrides de carga.
+Antes de solicitar autorización, usar `performance_workflow.py preflight` según el contract. Este wrapper toma target y workload directamente del plan y no acepta overrides de carga.
 
 Tras autorización explícita:
 
 1. Ejecutar `validate_environment.py`.
 2. Si falla, detenerse.
-3. Ejecutar `run_approved_plan.py --authorized` exactamente como especifica el contract.
+3. Ejecutar `performance_workflow.py execute` exactamente como especifica el contract.
 4. No construir manualmente argumentos `--threads`, `--ramp-time`, `--duration` o `--target`.
 5. No modificar parámetros.
 6. No repetir automáticamente una ejecución fallida.
@@ -93,3 +93,27 @@ Reportar evidencia del pipeline: execution ID, verdict, requests, success/error 
 Separar hechos de hipótesis. No inferir root cause sin evidencia. No relajar SLA retrospectivamente.
 
 Para diagnóstico detallado transferir a `performance-results-analyst`.
+
+
+`performance_workflow.py execute` no concede autorización. La autorización debe existir previamente en el plan aprobado.
+
+## Public runner contract
+
+The public runner entry point is:
+
+`poetry run python scripts/performance_workflow.py`
+
+Use `preflight` before every controlled execution.
+
+Use `execute` only when the plan already records:
+
+- plan status `APPROVED`;
+- workload status `APPROVED`;
+- authorization status `AUTHORIZED`;
+- execution authorization flag enabled.
+
+The workflow must preserve the approved profile exactly or use a lower-risk profile only when deterministic validation confirms it remains within the approved workload.
+
+Never expose internal authorization flags or direct JMeter commands.
+
+A successful preflight means only that the execution bundle is ready. It does not grant authorization.

@@ -1,0 +1,129 @@
+metadata:
+  name: booking-e2e
+  version: '1.0'
+  description: Performance Test Plan generated from Postman executable scenario.
+  created_at: '2026-08-24T04:37:37.232156+00:00'
+  author: AI-Assisted Performance Engineering
+status: APPROVED
+source:
+  type: POSTMAN
+  candidate_id: booking-e2e-e2e-candidate
+  candidate_type: E2E_CANDIDATE
+objective: Validate the selected Postman scenario under a controlled baseline workload.
+system:
+  type: API
+  name: RestFull Booker_test
+environment: demo
+target:
+  protocol: https
+  host: restful-booker.herokuapp.com
+  port: 443
+  base_path: ''
+authentication:
+  type: DYNAMIC
+  description: Authentication inferred from Postman executable model.
+workload:
+  type: GENERATED-DESIGN-WORKLOAD
+  status: APPROVED
+  parameters:
+    threads: 5
+    ramp_time_seconds: 15
+    duration_seconds: 60
+    pacing_seconds: 2.0
+  description: Workload proposed from execution profile and requires human approval.
+sla:
+  error_rate_threshold_pct: 1.0
+  p95_threshold_ms: 1000
+  p99_threshold_ms: 2000
+  min_throughput_req_per_sec: 1.0
+  source: config/sla.json
+data:
+  requirements_file: /Users/amatosya/perfomance/demo-agent-perf/tests/plans/booking-e2e/data-requirements.json
+  source_type: PARAMETERIZED
+transactions:
+- name: Auth/CreateToken
+  method: POST
+  path: /auth
+  expected_status: 200
+- name: Booking/CreateBooking
+  method: POST
+  path: /booking
+  expected_status: 200
+- name: Booking/GetBooking
+  method: GET
+  path: /booking
+  expected_status: 200
+- name: Booking/GetBookingByID
+  method: GET
+  path: /booking/${booking_id}
+  expected_status: 200
+- name: Booking/UpdateBooking
+  method: PUT
+  path: /booking/${booking_id}
+  expected_status: 200
+- name: Booking/PartialUpdateBooking
+  method: PATCH
+  path: /booking/${booking_id}
+  expected_status: 200
+- name: Booking/DeleteBooking
+  method: DELETE
+  path: /booking/${booking_id}
+  expected_status: 200
+correlations:
+  description: Runtime correlations generated from Postman dependency analysis.
+  extractors:
+  - runtime_variable: access_token
+    producer: Auth/CreateToken
+    json_path: $.token
+    source: POSTMAN_SCRIPT
+    postman_scope: GLOBALS
+    confidence: HIGH
+    status: RESOLVED
+    consumers:
+    - Booking/DeleteBooking
+    - Booking/PartialUpdateBooking
+    - Booking/UpdateBooking
+  - runtime_variable: booking_id
+    producer: Booking/CreateBooking
+    json_path: $.bookingid
+    json_path_candidates:
+    - $.bookingid
+    - $.booking_id
+    - $.id
+    consumers:
+    - Booking/DeleteBooking
+    - Booking/GetBookingByID
+    - Booking/PartialUpdateBooking
+    - Booking/UpdateBooking
+    source: INFERRED_RESOURCE_LIFECYCLE
+    confidence: HIGH
+    status: RESOLVED
+    evidence:
+      create_path: /booking
+      static_resource_count: 4
+assertions:
+- type: RESPONSE_CODE
+  expected_value: '200'
+  description: Validate successful HTTP response.
+observability:
+  metrics:
+  - source: JMeter Prometheus Listener
+    endpoint: http://localhost:9270/metrics
+  - source: Prometheus
+    url: http://localhost:9090
+  - source: Grafana
+    url: http://localhost:3000
+  gaps: []
+risks: []
+authorization:
+  required: true
+  status: AUTHORIZED
+  authorized_by: Adrian Matos
+  authorized_at: '2026-08-23T23:38:45.903958-05:00'
+  notes: Authorized for controlled performance execution.
+open_questions: []
+approval:
+  approved_by: Adrian Matos
+  approved_at: '2026-08-23T23:38:24.316599-05:00'
+  scope: DESIGN_AND_WORKLOAD
+  execution_authorized: true

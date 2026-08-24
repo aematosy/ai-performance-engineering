@@ -91,10 +91,10 @@ risks:
   mitigation: Usar este escenario como validación técnica del flujo y línea base del endpoint, no como benchmark de persistencia real.
 authorization:
   required: true
-  status: PENDING
-  authorized_by: null
-  authorized_at: null
-  notes: El plan permanece en estado DRAFT. No está autorizado para ejecución hasta recibir aprobación explícita.
+  status: AUTHORIZED
+  authorized_by: Adrian Matos
+  authorized_at: '2026-08-23T00:18:56.626613-05:00'
+  notes: Authorized for controlled baseline demo execution.
 open_questions:
 - ¿Cuál es el volumen de carga real estimado en producción, por ejemplo TPS o concurrencia habitual?
 - ¿Existe algún endpoint privado equivalente con persistencia real para realizar pruebas de rendimiento exhaustivas?
@@ -103,4 +103,4 @@ approval:
   approved_by: Adrian Matos
   approved_at: '2026-08-22T20:04:51.341534-05:00'
   scope: DESIGN_AND_WORKLOAD
-  execution_authorized: false
+  execution_authorized: true

@@ -126,6 +126,12 @@ execution:
     generate_executive_report: true
     start_observability: true
 
+  timeouts:
+    jmeter:
+      minimum_buffer_seconds: 180
+      duration_buffer_ratio: 0.50
+      ramp_buffer_ratio: 0.25
+
   parameters:
     users:
       minimum: 1

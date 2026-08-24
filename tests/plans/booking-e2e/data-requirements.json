@@ -1,0 +1,43 @@
+{
+  "schema_version": "1.0",
+  "status": "APPROVED",
+  "scenario": "booking-e2e",
+  "scenario_candidate": {
+    "id": "booking-e2e-e2e-candidate",
+    "type": "E2E_CANDIDATE"
+  },
+  "data_strategy": "CSV",
+  "csv": {
+    "file": "/Users/amatosya/perfomance/demo-agent-perf/data/booking-e2e/test-data.csv",
+    "delimiter": ",",
+    "encoding": "utf-8",
+    "recycle": true,
+    "stop_thread_on_eof": false,
+    "sharing_mode": "all_threads"
+  },
+  "runtime_correlations": [
+    {
+      "name": "access_token",
+      "source_request": "Auth/CreateToken",
+      "type": "JSON_PATH",
+      "expression": "$.token"
+    },
+    {
+      "name": "booking_id",
+      "source_request": "Booking/CreateBooking",
+      "type": "JSON_PATH",
+      "expression": "$.bookingid"
+    }
+  ],
+  "secrets": [
+    {
+      "name": "secret_auth_createtoken_password",
+      "source": "JMETER_PROPERTY",
+      "persist_value": false
+    }
+  ],
+  "governance": {
+    "secrets_in_csv": false,
+    "runtime_correlations_in_csv": false
+  }
+}

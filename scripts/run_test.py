@@ -712,6 +712,14 @@ def parse_arguments(context: RuntimeContext) -> argparse.Namespace:
     parser.add_argument("--prometheus-port", type=int, default=port)
     parser.add_argument("--sla", type=Path, default=context.sla_file)
     parser.add_argument(
+        "--properties",
+        type=Path,
+        help=(
+            "Optional JMeter properties file loaded with -q. "
+            "The file content is never printed by this runner."
+        ),
+    )
+    parser.add_argument(
         "--results-directory",
         type=Path,
         default=context.results_directory,
@@ -750,7 +758,16 @@ def parse_arguments(context: RuntimeContext) -> argparse.Namespace:
     )
     parser.add_argument("--observability-timeout", type=int, default=60)
     parser.add_argument("--command-timeout", type=int, default=300)
-    parser.add_argument("--jmeter-timeout-buffer", type=int, default=120)
+    parser.add_argument(
+        "--jmeter-timeout-buffer",
+        type=int,
+        default=None,
+        help=(
+            "Optional explicit JMeter shutdown timeout buffer. "
+            "When omitted, the value is calculated from the "
+            "configured execution.timeouts.jmeter policy."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -783,6 +800,110 @@ def prepare_directory(
     return resolved
 
 
+def calculate_jmeter_timeout(
+    context: RuntimeContext,
+    args: argparse.Namespace,
+) -> tuple[int, int, str]:
+    """Calculate the maximum JMeter process lifetime.
+
+    Workload values come from the approved execution.
+    Timeout policy values come exclusively from project configuration.
+
+    An explicit --jmeter-timeout-buffer remains supported as
+    an operational override and takes precedence over the
+    configured dynamic policy.
+    """
+
+    if args.jmeter_timeout_buffer is not None:
+        buffer_seconds = int(
+            args.jmeter_timeout_buffer
+        )
+        source = "CLI_OVERRIDE"
+    else:
+        config = context.config
+
+        minimum_buffer = int(
+            config.get(
+                "execution.timeouts.jmeter."
+                "minimum_buffer_seconds",
+                required=True,
+            )
+        )
+
+        duration_ratio = float(
+            config.get(
+                "execution.timeouts.jmeter."
+                "duration_buffer_ratio",
+                required=True,
+            )
+        )
+
+        ramp_ratio = float(
+            config.get(
+                "execution.timeouts.jmeter."
+                "ramp_buffer_ratio",
+                required=True,
+            )
+        )
+
+        if minimum_buffer < 0:
+            raise PipelineError(
+                "execution.timeouts.jmeter."
+                "minimum_buffer_seconds cannot be negative."
+            )
+
+        if duration_ratio < 0:
+            raise PipelineError(
+                "execution.timeouts.jmeter."
+                "duration_buffer_ratio cannot be negative."
+            )
+
+        if ramp_ratio < 0:
+            raise PipelineError(
+                "execution.timeouts.jmeter."
+                "ramp_buffer_ratio cannot be negative."
+            )
+
+        duration_buffer = int(
+            round(
+                args.duration
+                * duration_ratio
+            )
+        )
+
+        ramp_buffer = int(
+            round(
+                args.ramp_time
+                * ramp_ratio
+            )
+        )
+
+        buffer_seconds = max(
+            minimum_buffer,
+            duration_buffer,
+            ramp_buffer,
+        )
+
+        source = "CONFIG_DYNAMIC_POLICY"
+
+    timeout_seconds = (
+        int(args.ramp_time)
+        + int(args.duration)
+        + buffer_seconds
+    )
+
+    if timeout_seconds <= 0:
+        raise PipelineError(
+            "Calculated JMeter timeout must be greater than zero."
+        )
+
+    return (
+        timeout_seconds,
+        buffer_seconds,
+        source,
+    )
+
+
 def validate_arguments(
     context: RuntimeContext,
     args: argparse.Namespace,
@@ -804,7 +925,10 @@ def validate_arguments(
     if min(args.observability_timeout, args.command_timeout) <= 0:
         raise PipelineError("Los timeouts deben ser mayores que cero.")
 
-    if args.jmeter_timeout_buffer < 0:
+    if (
+        args.jmeter_timeout_buffer is not None
+        and args.jmeter_timeout_buffer < 0
+    ):
         raise PipelineError(
             "--jmeter-timeout-buffer no puede ser negativo."
         )
@@ -966,6 +1090,11 @@ def main() -> int:
         root = config.project_root
         jmx = resolve_path(args.jmx, root)
         sla = resolve_path(args.sla, root)
+        properties_file = (
+            resolve_path(args.properties, root)
+            if args.properties is not None
+            else None
+        )
         results = prepare_directory(args.results_directory, root, "results")
         reports = prepare_directory(args.reports_directory, root, "reports")
 
@@ -980,6 +1109,12 @@ def main() -> int:
 
         validate_jmx(jmx)
         check_file(sla, "el archivo SLA")
+
+        if properties_file is not None:
+            check_file(
+                properties_file,
+                "el archivo de propiedades JMeter",
+            )
         check_file(
             context.validate_environment_script,
             "validate_environment.py",
@@ -1043,9 +1178,20 @@ def main() -> int:
             timestamp_format,
         )
 
-        jmeter_result = run_command(
+        jmeter_command = [
+            *context.jmeter_command,
+        ]
+
+        if properties_file is not None:
+            jmeter_command.extend(
+                [
+                    "-q",
+                    str(properties_file),
+                ]
+            )
+
+        jmeter_command.extend(
             [
-                *context.jmeter_command,
                 "-n",
                 "-t",
                 str(jmx),
@@ -1057,14 +1203,51 @@ def main() -> int:
                 f"-Jramp_time={args.ramp_time}",
                 f"-Jduration={args.duration}",
                 f"-Jprometheus_port={args.prometheus_port}",
-            ],
+            ]
+        )
+
+        (
+            jmeter_timeout_seconds,
+            jmeter_timeout_buffer,
+            jmeter_timeout_source,
+        ) = calculate_jmeter_timeout(
+            context,
+            args,
+        )
+
+        print()
+        print("=" * 78)
+        print("JMETER EXECUTION TIMEOUT POLICY")
+        print("=" * 78)
+        print(
+            f"Ramp-up           : "
+            f"{args.ramp_time} s"
+        )
+        print(
+            f"Duration          : "
+            f"{args.duration} s"
+        )
+        print(
+            f"Shutdown buffer   : "
+            f"{jmeter_timeout_buffer} s"
+        )
+        print(
+            f"Maximum runtime   : "
+            f"{jmeter_timeout_seconds} s"
+        )
+        print(
+            f"Policy source     : "
+            f"{jmeter_timeout_source}"
+        )
+        print("=" * 78)
+
+        jmeter_result = run_command(
+            jmeter_command,
             "Ejecutando prueba JMeter",
             cwd=root,
             allow_failure=True,
             timeout_seconds=(
-                args.ramp_time
-                + args.duration
-                + args.jmeter_timeout_buffer
+                jmeter_timeout_seconds
             ),
         )
 
@@ -1144,6 +1327,11 @@ def main() -> int:
             "files": {
                 "jmx": str(jmx),
                 "sla": str(sla),
+                "properties_file": (
+                    str(properties_file)
+                    if properties_file is not None
+                    else None
+                ),
                 "result_directory": str(paths.result_directory),
                 "report_directory": str(paths.report_directory),
                 "jtl": str(paths.jtl),

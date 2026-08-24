@@ -1,0 +1,120 @@
+{
+  "schema_version": "1.0",
+  "scenario_candidate": {
+    "id": "booking-updatebooking-dependency-dependency-flow",
+    "type": "DEPENDENCY_FLOW"
+  },
+  "selected_requests": [
+    "Auth/CreateToken",
+    "Booking/UpdateBooking"
+  ],
+  "test_data": [
+    {
+      "original_name": "firstname",
+      "classification": "TEST_DATA_CANDIDATE",
+      "source": "REQUEST_BODY",
+      "request_id": "Booking/UpdateBooking",
+      "location": "$.firstname",
+      "parameterizable": true,
+      "type": "STRING",
+      "example_value": "James",
+      "name": "booking_updatebooking_firstname",
+      "scenario_column_name": "firstname"
+    },
+    {
+      "original_name": "lastname",
+      "classification": "TEST_DATA_CANDIDATE",
+      "source": "REQUEST_BODY",
+      "request_id": "Booking/UpdateBooking",
+      "location": "$.lastname",
+      "parameterizable": true,
+      "type": "STRING",
+      "example_value": "Brown",
+      "name": "booking_updatebooking_lastname",
+      "scenario_column_name": "lastname"
+    },
+    {
+      "original_name": "totalprice",
+      "classification": "TEST_DATA_CANDIDATE",
+      "source": "REQUEST_BODY",
+      "request_id": "Booking/UpdateBooking",
+      "location": "$.totalprice",
+      "parameterizable": true,
+      "type": "INTEGER",
+      "example_value": 111,
+      "name": "booking_updatebooking_totalprice",
+      "scenario_column_name": "totalprice"
+    },
+    {
+      "original_name": "depositpaid",
+      "classification": "TEST_DATA_CANDIDATE",
+      "source": "REQUEST_BODY",
+      "request_id": "Booking/UpdateBooking",
+      "location": "$.depositpaid",
+      "parameterizable": true,
+      "type": "BOOLEAN",
+      "example_value": true,
+      "name": "booking_updatebooking_depositpaid",
+      "scenario_column_name": "depositpaid"
+    },
+    {
+      "original_name": "checkin",
+      "classification": "TEST_DATA_CANDIDATE",
+      "source": "REQUEST_BODY",
+      "request_id": "Booking/UpdateBooking",
+      "location": "$.bookingdates.checkin",
+      "parameterizable": true,
+      "type": "STRING",
+      "example_value": "2018-01-01",
+      "name": "booking_updatebooking_checkin",
+      "scenario_column_name": "checkin"
+    },
+    {
+      "original_name": "checkout",
+      "classification": "TEST_DATA_CANDIDATE",
+      "source": "REQUEST_BODY",
+      "request_id": "Booking/UpdateBooking",
+      "location": "$.bookingdates.checkout",
+      "parameterizable": true,
+      "type": "STRING",
+      "example_value": "2019-01-01",
+      "name": "booking_updatebooking_checkout",
+      "scenario_column_name": "checkout"
+    },
+    {
+      "original_name": "additionalneeds",
+      "classification": "TEST_DATA_CANDIDATE",
+      "source": "REQUEST_BODY",
+      "request_id": "Booking/UpdateBooking",
+      "location": "$.additionalneeds",
+      "parameterizable": true,
+      "type": "STRING",
+      "example_value": "Breakfast",
+      "name": "booking_updatebooking_additionalneeds",
+      "scenario_column_name": "additionalneeds"
+    }
+  ],
+  "configuration": [
+    {
+      "name": "restfullMicroservice",
+      "classification": "CONFIGURATION",
+      "source": "ENVIRONMENT",
+      "parameterizable": false,
+      "value": "https://restful-booker.herokuapp.com"
+    }
+  ],
+  "runtime_correlated": [
+    {
+      "name": "access_token",
+      "classification": "RUNTIME_CORRELATED",
+      "source": "POSTMAN_SCRIPT",
+      "parameterizable": false
+    }
+  ],
+  "secrets": [],
+  "summary": {
+    "selected_request_count": 2,
+    "test_data_count": 7,
+    "csv_column_count": 7
+  }
+}

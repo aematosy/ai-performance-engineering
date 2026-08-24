@@ -1,0 +1,26 @@
+schema_version: "1.0"
+
+profile:
+  name: controlled-iterations
+  description: Deterministic finite execution for smoke/control validation.
+
+execution:
+  mode: ITERATIONS
+  threads: 2
+  ramp_time_seconds: 5
+  duration_seconds: null
+  iterations: 3
+  pacing_seconds: 1.0
+
+data:
+  recycle: false
+  stop_thread_on_eof: true
+  sharing_mode: all_threads
+  row_consumption: PER_ITERATION
+
+timeouts:
+  connect_timeout_ms: 5000
+  response_timeout_ms: 10000
+
+observability:
+  prometheus_port: 9270

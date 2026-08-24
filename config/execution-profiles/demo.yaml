@@ -1,0 +1,26 @@
+schema_version: "1.0"
+
+profile:
+  name: demo
+  description: Low-intensity demonstration workload.
+
+execution:
+  mode: DURATION
+  threads: 2
+  ramp_time_seconds: 5
+  duration_seconds: 30
+  iterations: null
+  pacing_seconds: 1.0
+
+data:
+  recycle: true
+  stop_thread_on_eof: false
+  sharing_mode: all_threads
+  row_consumption: PER_ITERATION
+
+timeouts:
+  connect_timeout_ms: 5000
+  response_timeout_ms: 10000
+
+observability:
+  prometheus_port: 9270

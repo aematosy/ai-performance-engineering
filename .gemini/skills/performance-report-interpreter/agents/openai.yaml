@@ -1,0 +1,3 @@
+interface:
+  display_name: "Intérprete de Reportes de Performance"
+  short_description: "Interpreta resultados, genera evidencia sanitizada, PDF profesional y exportación desde HTML."

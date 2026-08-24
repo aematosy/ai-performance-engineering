@@ -1,0 +1,149 @@
+{
+  "schema_version": "1.0",
+  "data_strategy": "CSV",
+  "csv": {
+    "file": "/Users/amatosya/perfomance/demo-agent-perf/data/restful-booker/test-data.csv",
+    "delimiter": ",",
+    "encoding": "utf-8",
+    "recycle": null,
+    "stop_thread_on_eof": null,
+    "sharing_mode": null
+  },
+  "parameters": [
+    {
+      "name": "booking_createbooking_firstname",
+      "type": "STRING",
+      "required": true,
+      "source": "REQUEST_BODY",
+      "request_id": "Booking/CreateBooking",
+      "location": "$.firstname"
+    },
+    {
+      "name": "booking_createbooking_lastname",
+      "type": "STRING",
+      "required": true,
+      "source": "REQUEST_BODY",
+      "request_id": "Booking/CreateBooking",
+      "location": "$.lastname"
+    },
+    {
+      "name": "booking_createbooking_totalprice",
+      "type": "INTEGER",
+      "required": true,
+      "source": "REQUEST_BODY",
+      "request_id": "Booking/CreateBooking",
+      "location": "$.totalprice"
+    },
+    {
+      "name": "booking_createbooking_depositpaid",
+      "type": "BOOLEAN",
+      "required": true,
+      "source": "REQUEST_BODY",
+      "request_id": "Booking/CreateBooking",
+      "location": "$.depositpaid"
+    },
+    {
+      "name": "booking_createbooking_checkin",
+      "type": "STRING",
+      "required": true,
+      "source": "REQUEST_BODY",
+      "request_id": "Booking/CreateBooking",
+      "location": "$.bookingdates.checkin"
+    },
+    {
+      "name": "booking_createbooking_checkout",
+      "type": "STRING",
+      "required": true,
+      "source": "REQUEST_BODY",
+      "request_id": "Booking/CreateBooking",
+      "location": "$.bookingdates.checkout"
+    },
+    {
+      "name": "booking_createbooking_additionalneeds",
+      "type": "STRING",
+      "required": true,
+      "source": "REQUEST_BODY",
+      "request_id": "Booking/CreateBooking",
+      "location": "$.additionalneeds"
+    },
+    {
+      "name": "booking_updatebooking_firstname",
+      "type": "STRING",
+      "required": true,
+      "source": "REQUEST_BODY",
+      "request_id": "Booking/UpdateBooking",
+      "location": "$.firstname"
+    },
+    {
+      "name": "booking_updatebooking_lastname",
+      "type": "STRING",
+      "required": true,
+      "source": "REQUEST_BODY",
+      "request_id": "Booking/UpdateBooking",
+      "location": "$.lastname"
+    },
+    {
+      "name": "booking_updatebooking_totalprice",
+      "type": "INTEGER",
+      "required": true,
+      "source": "REQUEST_BODY",
+      "request_id": "Booking/UpdateBooking",
+      "location": "$.totalprice"
+    },
+    {
+      "name": "booking_updatebooking_depositpaid",
+      "type": "BOOLEAN",
+      "required": true,
+      "source": "REQUEST_BODY",
+      "request_id": "Booking/UpdateBooking",
+      "location": "$.depositpaid"
+    },
+    {
+      "name": "booking_updatebooking_checkin",
+      "type": "STRING",
+      "required": true,
+      "source": "REQUEST_BODY",
+      "request_id": "Booking/UpdateBooking",
+      "location": "$.bookingdates.checkin"
+    },
+    {
+      "name": "booking_updatebooking_checkout",
+      "type": "STRING",
+      "required": true,
+      "source": "REQUEST_BODY",
+      "request_id": "Booking/UpdateBooking",
+      "location": "$.bookingdates.checkout"
+    },
+    {
+      "name": "booking_updatebooking_additionalneeds",
+      "type": "STRING",
+      "required": true,
+      "source": "REQUEST_BODY",
+      "request_id": "Booking/UpdateBooking",
+      "location": "$.additionalneeds"
+    },
+    {
+      "name": "booking_partialupdatebooking_firstname",
+      "type": "STRING",
+      "required": true,
+      "source": "REQUEST_BODY",
+      "request_id": "Booking/PartialUpdateBooking",
+      "location": "$.firstname"
+    },
+    {
+      "name": "booking_partialupdatebooking_lastname",
+      "type": "STRING",
+      "required": true,
+      "source": "REQUEST_BODY",
+      "request_id": "Booking/PartialUpdateBooking",
+      "location": "$.lastname"
+    }
+  ],
+  "governance": {
+    "recycle_policy": "REQUIRES_EXECUTION_PROFILE",
+    "row_capacity_validation": "REQUIRED_BEFORE_EXECUTION",
+    "secrets_in_csv": false,
+    "runtime_correlations_in_csv": false,
+    "configuration_in_csv": false
+  }
+}

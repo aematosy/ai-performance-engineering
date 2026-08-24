@@ -68,3 +68,20 @@ history/history.json
 
 # Generated JMX metadata
 tests/generated/*.jmx.meta.json
+data/restful-booker/e2e/secrets.properties
+
+# AI / workflow runtime artifacts
+work/
+workspaces/
+
+# Local patch / safety backups
+*.before-*
+
+# Authorization / generated state backups
+*.pre-authorization
+*.pre-review
+*.pre-validation
+
+# Local runtime properties / secrets
+*.properties
+!*.properties.template

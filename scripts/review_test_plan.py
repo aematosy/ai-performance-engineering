@@ -143,56 +143,134 @@ def review(plan_path: Path) -> tuple[dict[str, Any], list[Finding]]:
         ))
 
     # Workload/SLA feasibility guardrail. For closed workloads with positive
-    # pacing, threads / pacing is an optimistic throughput ceiling because it
-    # assumes zero response time. If that ceiling cannot exceed the configured
-    # minimum throughput SLA, the proposed workload is mathematically unable to
-    # satisfy the SLA and must be rejected before execution.
+    # Throughput feasibility.
+    #
+    # pacing_seconds represents pacing between complete scenario iterations,
+    # not pacing between individual HTTP samplers.
+    #
+    # Therefore, for a multi-request scenario, threads / pacing is NOT the
+    # HTTP-request throughput ceiling. The optimistic zero-response-time
+    # request ceiling is:
+    #
+    #     threads * requests_per_iteration / pacing
+    #
+    # Example:
+    #   2 users, 7 HTTP transactions, pacing 2s
+    #   -> optimistic ceiling = 2 * 7 / 2 = 7 req/s
+    #
+    # This check is intentionally optimistic and is used only to detect a
+    # workload that is mathematically incapable of reaching a minimum
+    # request-throughput SLA. It is not a throughput prediction.
     parameters = plan.get("workload", {}).get("parameters", {})
     threads = parameters.get("threads") if isinstance(parameters, dict) else None
     pacing = parameters.get("pacing_seconds") if isinstance(parameters, dict) else None
     min_throughput = sla.get("min_throughput_req_per_sec") if isinstance(sla, dict) else None
 
-    numeric_values = (threads, pacing, min_throughput)
-    if all(isinstance(value, (int, float)) and not isinstance(value, bool) for value in numeric_values):
+    transactions = plan.get("transactions", [])
+    request_transactions = (
+        [
+            transaction
+            for transaction in transactions
+            if isinstance(transaction, dict)
+        ]
+        if isinstance(transactions, list)
+        else []
+    )
+    requests_per_iteration = len(request_transactions)
+
+    numeric_values = (
+        threads,
+        pacing,
+        min_throughput,
+    )
+
+    if all(
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        for value in numeric_values
+    ):
         threads_f = float(threads)
         pacing_f = float(pacing)
         min_throughput_f = float(min_throughput)
+
         if threads_f <= 0:
             findings.append(Finding(
-                "ERROR", "WORKLOAD-INVALID-THREADS",
+                "ERROR",
+                "WORKLOAD-INVALID-THREADS",
                 "threads must be greater than zero.",
                 "workload.parameters.threads",
             ))
+
         if pacing_f < 0:
             findings.append(Finding(
-                "ERROR", "WORKLOAD-INVALID-PACING",
+                "ERROR",
+                "WORKLOAD-INVALID-PACING",
                 "pacing_seconds cannot be negative.",
                 "workload.parameters.pacing_seconds",
             ))
-        if pacing_f > 0 and threads_f > 0 and min_throughput_f > 0:
-            theoretical_ceiling = threads_f / pacing_f
-            if theoretical_ceiling <= min_throughput_f:
+
+        if (
+            pacing_f > 0
+            and threads_f > 0
+            and min_throughput_f > 0
+        ):
+            if requests_per_iteration <= 0:
                 findings.append(Finding(
-                    "ERROR", "SLA-WORKLOAD-INFEASIBLE",
+                    "INFO",
+                    "SLA-WORKLOAD-CEILING-NOT-EVALUATED",
                     (
-                        "Proposed workload cannot satisfy the minimum throughput SLA even "
-                        "with zero response time: theoretical ceiling "
-                        f"{theoretical_ceiling:.3f} req/s <= SLA "
-                        f"{min_throughput_f:.3f} req/s. Increase approved concurrency, "
-                        "reduce pacing, or revise the SLA only if its source changes."
+                        "Minimum-throughput feasibility was not evaluated "
+                        "because the plan does not expose HTTP transactions "
+                        "for the scenario iteration."
                     ),
-                    "workload.parameters",
+                    "transactions",
                 ))
-            elif theoretical_ceiling < min_throughput_f * 1.5:
-                findings.append(Finding(
-                    "INFO", "SLA-WORKLOAD-LOW-HEADROOM",
-                    (
-                        "The optimistic throughput ceiling has less than 50% headroom over "
-                        f"the SLA ({theoretical_ceiling:.3f} vs {min_throughput_f:.3f} req/s). "
-                        "Response time and client overhead may reduce observed throughput."
-                    ),
-                    "workload.parameters",
-                ))
+            else:
+                theoretical_ceiling = (
+                    threads_f
+                    * float(requests_per_iteration)
+                    / pacing_f
+                )
+
+                # Strictly lower means mathematically impossible even with
+                # zero response time. Equality is not impossible; it simply
+                # has zero theoretical headroom and is reported below.
+                if theoretical_ceiling < min_throughput_f:
+                    findings.append(Finding(
+                        "ERROR",
+                        "SLA-WORKLOAD-INFEASIBLE",
+                        (
+                            "Proposed workload cannot satisfy the minimum "
+                            "HTTP request-throughput SLA even with zero "
+                            "response time: "
+                            f"{threads_f:g} users x "
+                            f"{requests_per_iteration} requests/iteration / "
+                            f"{pacing_f:g}s pacing = "
+                            f"{theoretical_ceiling:.3f} req/s < SLA "
+                            f"{min_throughput_f:.3f} req/s."
+                        ),
+                        "workload.parameters",
+                    ))
+
+                elif theoretical_ceiling < (
+                    min_throughput_f * 1.5
+                ):
+                    findings.append(Finding(
+                        "INFO",
+                        "SLA-WORKLOAD-LOW-HEADROOM",
+                        (
+                            "The optimistic HTTP request-throughput ceiling "
+                            "has less than 50% headroom over the SLA: "
+                            f"{threads_f:g} users x "
+                            f"{requests_per_iteration} requests/iteration / "
+                            f"{pacing_f:g}s pacing = "
+                            f"{theoretical_ceiling:.3f} req/s versus "
+                            f"{min_throughput_f:.3f} req/s SLA. "
+                            "Actual throughput will also depend on response "
+                            "time and client/server overhead."
+                        ),
+                        "workload.parameters",
+                    ))
 
     # Duration quality signal.
     duration = parameters.get("duration_seconds") if isinstance(parameters, dict) else None

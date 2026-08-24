@@ -1,6 +1,11 @@
 # Plan de Pruebas de Rendimiento: create-post-demo
 
-**Estado:** `APPROVED`  
+**Status:** `APPROVED`
+**Workload Status:** `APPROVED`
+**Authorization Status:** `AUTHORIZED`
+**Authorized By:** `Adrian Matos`
+**Authorized At:** `2026-08-23T00:18:56.626613-05:00`
+
 **Versión:** 1.0  
 **Fecha:** 2026-08-22  
 **Autor:** Gemini CLI Performance Designer
@@ -204,9 +209,5 @@ La ejecución posterior deberá:
 4. ¿Qué workload debe aprobarse finalmente para la demo?
 
 ## 15. Estado de aprobación
-
-- **Test Plan:** `APPROVED`
-- **Workload:** `APPROVED`
-- **Execution Authorization:** `PENDING`
 
 No generar ni ejecutar carga hasta recibir aprobación explícita.

@@ -237,6 +237,235 @@ def svg_line_chart(
     )
 
 
+
+def format_metric(value, suffix=""):
+    if value is None:
+        return "N/A"
+
+    return (
+        html.escape(str(value))
+        + suffix
+    )
+
+
+def transaction_table_rows(
+    analysis,
+):
+    transactions = (
+        analysis
+        .get("metrics", {})
+        .get("transactions", [])
+    )
+
+    if not transactions:
+        return (
+            '<tr>'
+            '<td colspan="11" class="muted">'
+            'No transaction-level metrics available.'
+            '</td>'
+            '</tr>'
+        )
+
+    rows = []
+
+    for tx in transactions:
+        response = tx.get(
+            "response_time_ms",
+            {},
+        )
+
+        codes = tx.get(
+            "response_codes",
+            {},
+        )
+
+        codes_text = ", ".join(
+            "{}×{}".format(
+                html.escape(str(code)),
+                count,
+            )
+            for code, count
+            in codes.items()
+        )
+
+        status = str(
+            tx.get(
+                "status",
+                "UNKNOWN",
+            )
+        ).upper()
+
+        status_class = (
+            "status-pass"
+            if status == "PASS"
+            else "status-fail"
+        )
+
+        rows.append(
+            (
+                "<tr>"
+                "<td><strong>{label}</strong></td>"
+                "<td>{samples}</td>"
+                "<td>{success}%</td>"
+                "<td>{errors}%</td>"
+                "<td>{avg}</td>"
+                "<td>{p90}</td>"
+                "<td>{p95}</td>"
+                "<td>{p99}</td>"
+                "<td>{throughput}</td>"
+                "<td>{codes}</td>"
+                '<td class="{status_class}">'
+                "{status}"
+                "</td>"
+                "</tr>"
+            ).format(
+                label=html.escape(
+                    str(
+                        tx.get(
+                            "label",
+                            "unknown",
+                        )
+                    )
+                ),
+                samples=tx.get(
+                    "samples",
+                    0,
+                ),
+                success=tx.get(
+                    "success_rate_pct",
+                    0,
+                ),
+                errors=tx.get(
+                    "error_rate_pct",
+                    0,
+                ),
+                avg=format_metric(
+                    response.get("avg")
+                ),
+                p90=format_metric(
+                    response.get("p90")
+                ),
+                p95=format_metric(
+                    response.get("p95")
+                ),
+                p99=format_metric(
+                    response.get("p99")
+                ),
+                throughput=(
+                    format_metric(
+                        tx.get(
+                            "throughput_req_per_sec"
+                        )
+                    )
+                ),
+                codes=(
+                    codes_text
+                    or "N/A"
+                ),
+                status_class=(
+                    status_class
+                ),
+                status=(
+                    html.escape(
+                        status
+                    )
+                ),
+            )
+        )
+
+    return "".join(rows)
+
+
+def error_transaction_rows(
+    analysis,
+):
+    error_details = (
+        analysis
+        .get("metrics", {})
+        .get("error_details", [])
+    )
+
+    if not error_details:
+        return (
+            '<tr>'
+            '<td colspan="5" class="muted">'
+            'No failed transactions.'
+            '</td>'
+            '</tr>'
+        )
+
+    rows = []
+
+    for item in error_details:
+        codes = item.get(
+            "error_response_codes",
+            {},
+        )
+
+        messages = item.get(
+            "failure_messages",
+            {},
+        )
+
+        codes_text = ", ".join(
+            "{}×{}".format(
+                html.escape(str(code)),
+                count,
+            )
+            for code, count
+            in codes.items()
+        )
+
+        message_text = "<br>".join(
+            "{} × {}".format(
+                count,
+                html.escape(str(message)),
+            )
+            for message, count
+            in messages.items()
+        )
+
+        rows.append(
+            (
+                "<tr>"
+                "<td><strong>{label}</strong></td>"
+                "<td>{errors}</td>"
+                "<td>{rate}%</td>"
+                "<td>{codes}</td>"
+                "<td>{messages}</td>"
+                "</tr>"
+            ).format(
+                label=html.escape(
+                    str(
+                        item.get(
+                            "label",
+                            "unknown",
+                        )
+                    )
+                ),
+                errors=item.get(
+                    "error_count",
+                    0,
+                ),
+                rate=item.get(
+                    "error_rate_pct",
+                    0,
+                ),
+                codes=(
+                    codes_text
+                    or "N/A"
+                ),
+                messages=(
+                    message_text
+                    or "N/A"
+                ),
+            )
+        )
+
+    return "".join(rows)
+
+
+
 def build_recommendations(analysis):
     metrics = analysis["metrics"]
     recommendations = []
@@ -293,6 +522,57 @@ def build_html(
     metrics = analysis["metrics"]
     verdict = analysis["verdict"]
 
+    interactive_payload = {
+        "global": {
+            "label": "All Transactions",
+            "samples": metrics.get(
+                "total_requests",
+                0,
+            ),
+            "success_count": metrics.get(
+                "success_count",
+                0,
+            ),
+            "error_count": metrics.get(
+                "error_count",
+                0,
+            ),
+            "success_rate_pct": metrics.get(
+                "success_rate_pct",
+                0,
+            ),
+            "error_rate_pct": metrics.get(
+                "error_rate_pct",
+                0,
+            ),
+            "throughput_req_per_sec": metrics.get(
+                "throughput_req_per_sec"
+            ),
+            "response_time_ms": metrics.get(
+                "response_time_ms",
+                {},
+            ),
+            "response_codes": {},
+            "time_series": metrics.get(
+                "time_series",
+                [],
+            ),
+        },
+        "transactions": metrics.get(
+            "transactions",
+            [],
+        ),
+    }
+
+    service_dashboard_json = (
+        json.dumps(
+            interactive_payload,
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
+        .replace("</", "<\\/")
+    )
+
     verdict_class = (
         "verdict-pass"
         if verdict == "PASS"
@@ -344,6 +624,18 @@ def build_html(
             ),
         )
         for check in analysis["sla_checks"]
+    )
+
+    transaction_rows = (
+        transaction_table_rows(
+            analysis
+        )
+    )
+
+    transaction_error_rows = (
+        error_transaction_rows(
+            analysis
+        )
     )
 
     errors_by_code = metrics.get(
@@ -523,6 +815,15 @@ def build_html(
     padding: 18px;
   }}
 
+  .table-scroll {{
+    width: 100%;
+    overflow-x: auto;
+  }}
+
+  .table-scroll table {{
+    min-width: 1050px;
+  }}
+
   .card-value {{
     margin-top: 6px;
     font-size: 27px;
@@ -607,10 +908,734 @@ def build_html(
       grid-template-columns: 1fr;
     }}
   }}
+
+  :root {{
+    color-scheme: dark;
+
+    --theme-bg: #0d1117;
+    --theme-surface: #151b23;
+    --theme-surface-alt: #1b222c;
+    --theme-border: #303844;
+
+    --theme-text: #f2f5f8;
+    --theme-text-secondary: #a6b0bd;
+    --theme-muted: #8d98a6;
+
+    --theme-table-header: #1b222c;
+    --theme-table-alt: #111820;
+
+    --theme-shadow: rgba(0, 0, 0, 0.20);
+
+    --theme-toggle-bg: #1b222c;
+    --theme-toggle-hover: #252e39;
+  }}
+
+  html[data-theme="light"] {{
+    color-scheme: light;
+
+    --theme-bg: #f5f7fa;
+    --theme-surface: #ffffff;
+    --theme-surface-alt: #f3f5f8;
+    --theme-border: #d8dee7;
+
+    --theme-text: #18202a;
+    --theme-text-secondary: #4e5968;
+    --theme-muted: #697586;
+
+    --theme-table-header: #edf1f5;
+    --theme-table-alt: #f8fafc;
+
+    --theme-shadow: rgba(15, 23, 42, 0.08);
+
+    --theme-toggle-bg: #ffffff;
+    --theme-toggle-hover: #f0f3f7;
+  }}
+
+  html,
+  body {{
+    background: var(--theme-bg) !important;
+    color: var(--theme-text) !important;
+
+    transition:
+      background-color 0.18s ease,
+      color 0.18s ease;
+  }}
+
+  body {{
+    min-height: 100vh;
+  }}
+
+  .panel,
+  .card,
+  .metric-card,
+  .summary-card {{
+    background: var(--theme-surface) !important;
+    border-color: var(--theme-border) !important;
+    color: var(--theme-text) !important;
+  }}
+
+  h1,
+  h2,
+  h3,
+  h4,
+  strong,
+  .card-value {{
+    color: var(--theme-text) !important;
+  }}
+
+  p,
+  .muted,
+  .subtitle,
+  .card-label {{
+    color: var(--theme-text-secondary) !important;
+  }}
+
+  table {{
+    color: var(--theme-text) !important;
+  }}
+
+  th {{
+    background: var(--theme-table-header) !important;
+    color: var(--theme-text) !important;
+    border-color: var(--theme-border) !important;
+  }}
+
+  td {{
+    color: var(--theme-text) !important;
+    border-color: var(--theme-border) !important;
+  }}
+
+  tbody tr:nth-child(even) {{
+    background: var(--theme-table-alt) !important;
+  }}
+
+  .report-toolbar {{
+    position: fixed;
+    top: 18px;
+    right: 22px;
+    z-index: 9999;
+
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }}
+
+  .theme-toggle {{
+    appearance: none;
+
+    border: 1px solid var(--theme-border);
+    border-radius: 999px;
+
+    background: var(--theme-toggle-bg);
+    color: var(--theme-text);
+
+    padding: 9px 14px;
+
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+
+    font: inherit;
+    font-size: 13px;
+    font-weight: 700;
+
+    cursor: pointer;
+
+    box-shadow:
+      0 6px 18px var(--theme-shadow);
+
+    transition:
+      background-color 0.15s ease,
+      border-color 0.15s ease,
+      transform 0.15s ease;
+  }}
+
+  .theme-toggle:hover {{
+    background: var(--theme-toggle-hover);
+    transform: translateY(-1px);
+  }}
+
+  .theme-toggle:focus-visible {{
+    outline: 2px solid currentColor;
+    outline-offset: 3px;
+  }}
+
+  .theme-toggle-icon {{
+    font-size: 16px;
+    line-height: 1;
+  }}
+
+  @media (max-width: 720px) {{
+    .report-toolbar {{
+      position: static;
+      justify-content: flex-end;
+      margin-bottom: 16px;
+    }}
+  }}
+
+
+  /* ==========================================================
+     REPORT THEME v3
+     Semantic tokens shared by every report component.
+     Literal braces are doubled because this template uses
+     Python str.format().
+     ========================================================== */
+
+  :root {{
+    --report-bg: #0d1117;
+    --report-panel: #151b23;
+    --report-panel-soft: #1b222c;
+    --report-card: #151b23;
+    --report-card-strong: #1b222c;
+
+    --report-text: #f2f5f8;
+    --report-text-secondary: #a6b0bd;
+    --report-muted: #8d98a6;
+
+    --report-border: #303844;
+    --report-table-head: #1b222c;
+    --report-table-alt: #111820;
+
+    --report-input-bg: #151b23;
+
+    --report-grid: #303844;
+    --report-axis-text: #8d98a6;
+
+    --report-response: #58a6ff;
+    --report-throughput: #d29922;
+    --report-error: #f85149;
+
+    --report-pass: #3fb950;
+    --report-fail: #f85149;
+
+    --report-shadow:
+      0 12px 30px rgba(0, 0, 0, 0.18);
+  }}
+
+  html[data-theme="light"] {{
+    --report-bg: #f4f7fb;
+    --report-panel: #ffffff;
+    --report-panel-soft: #f7f9fc;
+    --report-card: #ffffff;
+    --report-card-strong: #ffffff;
+
+    --report-text: #17202c;
+    --report-text-secondary: #4d5968;
+    --report-muted: #6d7886;
+
+    --report-border: #d8e0ea;
+    --report-table-head: #edf2f7;
+    --report-table-alt: #f7f9fc;
+
+    --report-input-bg: #ffffff;
+
+    --report-grid: #d7dee8;
+    --report-axis-text: #687386;
+
+    --report-response: #2563eb;
+    --report-throughput: #b86e00;
+    --report-error: #dc2626;
+
+    --report-pass: #16803d;
+    --report-fail: #d92d20;
+
+    --report-shadow:
+      0 8px 24px rgba(15, 23, 42, 0.07);
+  }}
+
+  html,
+  body {{
+    background: var(--report-bg) !important;
+    color: var(--report-text) !important;
+  }}
+
+  body {{
+    color: var(--report-text) !important;
+  }}
+
+  h1,
+  h2,
+  h3,
+  h4 {{
+    color: var(--report-text) !important;
+  }}
+
+  p,
+  .subtitle,
+  .muted {{
+    color: var(--report-text-secondary) !important;
+  }}
+
+  .panel,
+  .card,
+  .metric-card,
+  .summary-card {{
+    background: var(--report-panel) !important;
+    border-color: var(--report-border) !important;
+    color: var(--report-text) !important;
+    box-shadow: var(--report-shadow);
+  }}
+
+  /* Metadata cards at the top.
+     This intentionally overrides their previous dark-only design. */
+  .meta-card,
+  .metadata-card,
+  .info-card {{
+    background: var(--report-card-strong) !important;
+    border-color: var(--report-border) !important;
+    color: var(--report-text) !important;
+  }}
+
+  .meta-card *,
+  .metadata-card *,
+  .info-card * {{
+    color: var(--report-text) !important;
+  }}
+
+  .meta-card .label,
+  .metadata-card .label,
+  .info-card .label,
+  .card-label {{
+    color: var(--report-muted) !important;
+  }}
+
+  table {{
+    color: var(--report-text) !important;
+  }}
+
+  th {{
+    background: var(--report-table-head) !important;
+    border-color: var(--report-border) !important;
+    color: var(--report-text) !important;
+  }}
+
+  td {{
+    border-color: var(--report-border) !important;
+    color: var(--report-text) !important;
+  }}
+
+  tbody tr:nth-child(even) {{
+    background: var(--report-table-alt) !important;
+  }}
+
+  .status-pass {{
+    color: var(--report-pass) !important;
+  }}
+
+  .status-fail {{
+    color: var(--report-fail) !important;
+  }}
+
+  .service-dashboard {{
+    margin-top: 24px;
+  }}
+
+  .service-dashboard-toolbar {{
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 20px;
+    flex-wrap: wrap;
+
+    margin-bottom: 20px;
+  }}
+
+  .service-selector-group {{
+    min-width: min(100%, 420px);
+  }}
+
+  .service-selector-group label {{
+    display: block;
+
+    margin-bottom: 7px;
+
+    color: var(--report-muted);
+
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }}
+
+  .service-selector {{
+    width: 100%;
+    min-height: 44px;
+
+    padding: 9px 38px 9px 12px;
+
+    border: 1px solid var(--report-border);
+    border-radius: 10px;
+
+    background: var(--report-input-bg);
+    color: var(--report-text);
+
+    font: inherit;
+    font-weight: 650;
+
+    cursor: pointer;
+  }}
+
+  .service-selector:focus {{
+    outline: 2px solid var(--report-response);
+    outline-offset: 2px;
+  }}
+
+  .service-context {{
+    color: var(--report-muted);
+
+    font-size: 13px;
+  }}
+
+  .service-kpis {{
+    display: grid;
+    grid-template-columns:
+      repeat(7, minmax(110px, 1fr));
+    gap: 12px;
+
+    margin-bottom: 22px;
+  }}
+
+  .service-kpi {{
+    min-height: 92px;
+
+    padding: 15px;
+
+    border: 1px solid var(--report-border);
+    border-radius: 12px;
+
+    background: var(--report-panel-soft);
+  }}
+
+  .service-kpi-label {{
+    margin-bottom: 9px;
+
+    color: var(--report-muted);
+
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+  }}
+
+  .service-kpi-value {{
+    color: var(--report-text);
+
+    font-size: 22px;
+    font-weight: 800;
+    line-height: 1.15;
+  }}
+
+  .interactive-chart-grid {{
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+  }}
+
+  .interactive-chart-grid
+  .service-chart-panel:last-child {{
+    grid-column: 1 / -1;
+  }}
+
+  .service-chart-panel {{
+    min-width: 0;
+
+    padding: 18px;
+
+    border: 1px solid var(--report-border);
+    border-radius: 14px;
+
+    background: var(--report-panel);
+  }}
+
+  .service-chart-panel h3 {{
+    margin: 0 0 12px;
+  }}
+
+  .service-chart {{
+    width: 100%;
+    min-height: 260px;
+  }}
+
+  .service-chart svg {{
+    display: block;
+    width: 100%;
+    height: auto;
+  }}
+
+  .chart-empty {{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    min-height: 220px;
+
+    color: var(--report-muted);
+  }}
+
+  .legacy-global-charts {{
+    display: none !important;
+  }}
+
+  @media (max-width: 1250px) {{
+    .service-kpis {{
+      grid-template-columns:
+        repeat(4, minmax(120px, 1fr));
+    }}
+  }}
+
+  @media (max-width: 900px) {{
+    .interactive-chart-grid {{
+      grid-template-columns: 1fr;
+    }}
+
+    .interactive-chart-grid
+    .service-chart-panel:last-child {{
+      grid-column: auto;
+    }}
+
+    .service-kpis {{
+      grid-template-columns:
+        repeat(2, minmax(120px, 1fr));
+    }}
+  }}
+
+  @media (max-width: 560px) {{
+    .service-kpis {{
+      grid-template-columns: 1fr;
+    }}
+  }}
+
+
+  /* ==========================================================
+     FINAL THEME HARDENING v1
+
+     Goals:
+     - Light mode must never leave dark context cards.
+     - Text must always inherit the appropriate theme color.
+     - No scenario/service names are referenced here.
+     - Charts continue using the existing theme variables.
+     ========================================================== */
+
+  html[data-theme="light"] {{
+    color-scheme: light;
+  }}
+
+  html[data-theme="dark"] {{
+    color-scheme: dark;
+  }}
+
+  /*
+   * Generic report surfaces.
+   */
+  html[data-theme="light"] .panel,
+  html[data-theme="light"] .card,
+  html[data-theme="light"] .metric-card,
+  html[data-theme="light"] .summary-card,
+  html[data-theme="light"] .service-kpi,
+  html[data-theme="light"] .service-chart-panel {{
+    background-color: var(--report-panel) !important;
+    border-color: var(--report-border) !important;
+    color: var(--report-text) !important;
+  }}
+
+  /*
+   * Context / metadata containers.
+   *
+   * Different report versions may call these meta, metadata,
+   * context, info, overview or hero cards. Attribute selectors
+   * keep the theme portable across those layouts.
+   */
+  html[data-theme="light"] [class*="meta"],
+  html[data-theme="light"] [class*="metadata"],
+  html[data-theme="light"] [class*="context"],
+  html[data-theme="light"] [class*="info-card"],
+  html[data-theme="light"] [class*="overview-card"] {{
+    background-color: var(--report-card) !important;
+    border-color: var(--report-border) !important;
+    color: var(--report-text) !important;
+  }}
+
+  /*
+   * Common grid children used by report header/context sections.
+   * Only direct card-like children are normalized.
+   */
+  html[data-theme="light"] [class*="meta"] > *,
+  html[data-theme="light"] [class*="metadata"] > *,
+  html[data-theme="light"] [class*="context"] > *,
+  html[data-theme="light"] [class*="overview"] > * {{
+    background-color: var(--report-card) !important;
+    border-color: var(--report-border) !important;
+    color: var(--report-text) !important;
+  }}
+
+  /*
+   * Text inside themed surfaces must inherit the surface color
+   * instead of retaining a dark-only hardcoded value.
+   */
+  html[data-theme="light"] .panel *,
+  html[data-theme="light"] .card *,
+  html[data-theme="light"] .metric-card *,
+  html[data-theme="light"] .summary-card *,
+  html[data-theme="light"] [class*="meta"] *,
+  html[data-theme="light"] [class*="metadata"] *,
+  html[data-theme="light"] [class*="context"] *,
+  html[data-theme="light"] [class*="overview-card"] * {{
+    color: inherit;
+  }}
+
+  /*
+   * Secondary labels receive explicit muted contrast.
+   */
+  html[data-theme="light"] .card-label,
+  html[data-theme="light"] .service-kpi-label,
+  html[data-theme="light"] [class*="label"],
+  html[data-theme="light"] .muted {{
+    color: var(--report-muted) !important;
+  }}
+
+  /*
+   * Restore primary values after the generic label rule.
+   */
+  html[data-theme="light"] .card-value,
+  html[data-theme="light"] .service-kpi-value,
+  html[data-theme="light"] td,
+  html[data-theme="light"] strong {{
+    color: var(--report-text) !important;
+  }}
+
+  /*
+   * Tables.
+   */
+  html[data-theme="light"] table {{
+    background-color: var(--report-panel) !important;
+    color: var(--report-text) !important;
+  }}
+
+  html[data-theme="light"] thead,
+  html[data-theme="light"] th {{
+    background-color: var(--report-table-head) !important;
+    color: var(--report-text) !important;
+  }}
+
+  html[data-theme="light"] tbody tr {{
+    background-color: var(--report-panel) !important;
+  }}
+
+  html[data-theme="light"] tbody tr:nth-child(even) {{
+    background-color: var(--report-table-alt) !important;
+  }}
+
+  /*
+   * Inputs.
+   */
+  html[data-theme="light"] select,
+  html[data-theme="light"] .service-selector,
+  html[data-theme="light"] button {{
+    background-color: var(--report-input-bg) !important;
+    border-color: var(--report-border) !important;
+    color: var(--report-text) !important;
+  }}
+
+  /*
+   * Semantic colors must NOT be flattened by generic inheritance.
+   */
+  html[data-theme="light"] .status-pass {{
+    color: var(--report-pass) !important;
+  }}
+
+  html[data-theme="light"] .status-fail {{
+    color: var(--report-fail) !important;
+  }}
+
+  /*
+   * Theme toggle itself.
+   */
+  html[data-theme="light"] .theme-toggle {{
+    background-color: #ffffff !important;
+    border-color: var(--report-border) !important;
+    color: var(--report-text) !important;
+  }}
+
+  /*
+   * Dark mode explicit normalization as well. This prevents a
+   * future light-only rule from leaving components inconsistent.
+   */
+  html[data-theme="dark"] .panel,
+  html[data-theme="dark"] .card,
+  html[data-theme="dark"] .metric-card,
+  html[data-theme="dark"] .summary-card,
+  html[data-theme="dark"] .service-kpi,
+  html[data-theme="dark"] .service-chart-panel {{
+    background-color: var(--report-panel) !important;
+    border-color: var(--report-border) !important;
+    color: var(--report-text) !important;
+  }}
+
+  /* FINAL THEME HARDENING v1 */
+
 </style>
+
+<script>
+(function () {{
+  const storageKey =
+    "performance-report-theme";
+
+  let theme = null;
+
+  try {{
+    theme = localStorage.getItem(
+      storageKey
+    );
+  }} catch (error) {{
+    theme = null;
+  }}
+
+  if (
+    theme !== "dark"
+    && theme !== "light"
+  ) {{
+    theme = (
+      window.matchMedia
+      && window.matchMedia(
+        "(prefers-color-scheme: light)"
+      ).matches
+    )
+      ? "light"
+      : "dark";
+  }}
+
+  document.documentElement
+    .setAttribute(
+      "data-theme",
+      theme
+    );
+}})();
+</script>
+
 </head>
 
 <body>
+
+  <div class="report-toolbar">
+    <button
+      id="theme-toggle"
+      class="theme-toggle"
+      type="button"
+      aria-label="Cambiar tema del reporte"
+      title="Cambiar tema"
+    >
+      <span
+        id="theme-toggle-icon"
+        class="theme-toggle-icon"
+        aria-hidden="true"
+      ></span>
+
+      <span id="theme-toggle-label">
+        Theme
+      </span>
+    </button>
+  </div>
+
 <div class="container">
 
   <header class="header">
@@ -711,7 +1736,202 @@ def build_html(
     </table>
   </section>
 
-  <section class="chart-grid">
+  <section class="panel">
+    <h2>Transaction / Service Breakdown</h2>
+
+    <p class="muted">
+      Metrics grouped dynamically by JMeter label.
+      Labels may represent endpoints, services,
+      business transactions or imported test steps.
+    </p>
+
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Transaction / Service</th>
+            <th>Samples</th>
+            <th>Success %</th>
+            <th>Error %</th>
+            <th>Avg ms</th>
+            <th>p90 ms</th>
+            <th>p95 ms</th>
+            <th>p99 ms</th>
+            <th>Req/s</th>
+            <th>Response Codes</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {transaction_rows}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Errors by Transaction / Service</h2>
+
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Transaction / Service</th>
+            <th>Errors</th>
+            <th>Error %</th>
+            <th>Response Codes</th>
+            <th>Failure Details</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {transaction_error_rows}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel service-dashboard">
+    <div class="service-dashboard-toolbar">
+      <div class="service-selector-group">
+        <label for="service-selector">
+          Transaction / Service
+        </label>
+
+        <select
+          id="service-selector"
+          class="service-selector"
+        ></select>
+      </div>
+
+      <div
+        id="service-context"
+        class="service-context"
+      >
+        All Transactions
+      </div>
+    </div>
+
+    <div class="service-kpis">
+      <div class="service-kpi">
+        <div class="service-kpi-label">
+          Samples
+        </div>
+        <div
+          id="service-kpi-samples"
+          class="service-kpi-value"
+        >
+          —
+        </div>
+      </div>
+
+      <div class="service-kpi">
+        <div class="service-kpi-label">
+          Success
+        </div>
+        <div
+          id="service-kpi-success"
+          class="service-kpi-value"
+        >
+          —
+        </div>
+      </div>
+
+      <div class="service-kpi">
+        <div class="service-kpi-label">
+          Error Rate
+        </div>
+        <div
+          id="service-kpi-errors"
+          class="service-kpi-value"
+        >
+          —
+        </div>
+      </div>
+
+      <div class="service-kpi">
+        <div class="service-kpi-label">
+          Average
+        </div>
+        <div
+          id="service-kpi-avg"
+          class="service-kpi-value"
+        >
+          —
+        </div>
+      </div>
+
+      <div class="service-kpi">
+        <div class="service-kpi-label">
+          p95
+        </div>
+        <div
+          id="service-kpi-p95"
+          class="service-kpi-value"
+        >
+          —
+        </div>
+      </div>
+
+      <div class="service-kpi">
+        <div class="service-kpi-label">
+          p99
+        </div>
+        <div
+          id="service-kpi-p99"
+          class="service-kpi-value"
+        >
+          —
+        </div>
+      </div>
+
+      <div class="service-kpi">
+        <div class="service-kpi-label">
+          Throughput
+        </div>
+        <div
+          id="service-kpi-throughput"
+          class="service-kpi-value"
+        >
+          —
+        </div>
+      </div>
+    </div>
+
+    <div class="interactive-chart-grid">
+      <div class="service-chart-panel">
+        <h3>Response Time Trend</h3>
+        <div
+          id="service-response-chart"
+          class="service-chart"
+        ></div>
+      </div>
+
+      <div class="service-chart-panel">
+        <h3>Throughput Trend</h3>
+        <div
+          id="service-throughput-chart"
+          class="service-chart"
+        ></div>
+      </div>
+
+      <div class="service-chart-panel">
+        <h3>Error Rate Trend</h3>
+        <div
+          id="service-error-chart"
+          class="service-chart"
+        ></div>
+      </div>
+    </div>
+  </section>
+
+  <script
+    id="service-dashboard-data"
+    type="application/json"
+  >{service_dashboard_json}</script>
+
+  <section class="chart-grid legacy-global-charts">
     <div class="panel chart-panel">
       <h2>Response Time Trend</h2>
       {response_time_chart}
@@ -776,6 +1996,619 @@ def build_html(
   </footer>
 
 </div>
+
+<script>
+(function () {{
+  const storageKey =
+    "performance-report-theme";
+
+  const button =
+    document.getElementById(
+      "theme-toggle"
+    );
+
+  const icon =
+    document.getElementById(
+      "theme-toggle-icon"
+    );
+
+  const label =
+    document.getElementById(
+      "theme-toggle-label"
+    );
+
+  if (!button || !icon || !label) {{
+    return;
+  }}
+
+  function currentTheme() {{
+    return (
+      document.documentElement
+        .getAttribute(
+          "data-theme"
+        )
+      || "dark"
+    );
+  }}
+
+  function render() {{
+    const theme = currentTheme();
+
+    if (theme === "dark") {{
+      icon.textContent = "☀";
+      label.textContent = "Light";
+
+      button.setAttribute(
+        "aria-label",
+        "Cambiar a tema claro"
+      );
+    }} else {{
+      icon.textContent = "☾";
+      label.textContent = "Dark";
+
+      button.setAttribute(
+        "aria-label",
+        "Cambiar a tema oscuro"
+      );
+    }}
+  }}
+
+  button.addEventListener(
+    "click",
+    function () {{
+      const next = (
+        currentTheme() === "dark"
+      )
+        ? "light"
+        : "dark";
+
+      document.documentElement
+        .setAttribute(
+          "data-theme",
+          next
+        );
+
+      try {{
+        localStorage.setItem(
+          storageKey,
+          next
+        );
+      }} catch (error) {{
+        // Storage may be unavailable in
+        // restricted browser contexts.
+      }}
+
+      render();
+    }}
+  );
+
+  render();
+}})();
+</script>
+
+
+<script>
+(function () {{
+  const source =
+    document.getElementById(
+      "service-dashboard-data"
+    );
+
+  const selector =
+    document.getElementById(
+      "service-selector"
+    );
+
+  if (!source || !selector) {{
+    return;
+  }}
+
+  let payload;
+
+  try {{
+    payload = JSON.parse(
+      source.textContent
+    );
+  }} catch (error) {{
+    console.error(
+      "Unable to parse service dashboard data.",
+      error
+    );
+    return;
+  }}
+
+  const globalItem =
+    payload.global || {{}};
+
+  const transactions =
+    Array.isArray(
+      payload.transactions
+    )
+      ? payload.transactions
+      : [];
+
+  const items = [
+    globalItem,
+    ...transactions,
+  ];
+
+  const css = function (name, fallback) {{
+    const value =
+      getComputedStyle(
+        document.documentElement
+      )
+      .getPropertyValue(name)
+      .trim();
+
+    return value || fallback;
+  }};
+
+  function valueOrDash(value) {{
+    return (
+      value === null
+      || value === undefined
+      || Number.isNaN(value)
+    )
+      ? "—"
+      : value;
+  }}
+
+  function fixed(value, digits) {{
+    if (
+      value === null
+      || value === undefined
+      || Number.isNaN(
+        Number(value)
+      )
+    ) {{
+      return "—";
+    }}
+
+    return Number(value)
+      .toFixed(digits);
+  }}
+
+  function selectedItem() {{
+    const index =
+      Number(selector.value);
+
+    return items[index]
+      || items[0];
+  }}
+
+  function setText(id, text) {{
+    const element =
+      document.getElementById(id);
+
+    if (element) {{
+      element.textContent = text;
+    }}
+  }}
+
+  function updateKpis(item) {{
+    const response =
+      item.response_time_ms || {{}};
+
+    setText(
+      "service-context",
+      item.label
+      || "All Transactions"
+    );
+
+    setText(
+      "service-kpi-samples",
+      valueOrDash(
+        item.samples
+      )
+    );
+
+    setText(
+      "service-kpi-success",
+      fixed(
+        item.success_rate_pct,
+        2
+      ) + "%"
+    );
+
+    setText(
+      "service-kpi-errors",
+      fixed(
+        item.error_rate_pct,
+        2
+      ) + "%"
+    );
+
+    setText(
+      "service-kpi-avg",
+      fixed(
+        response.avg,
+        2
+      ) + " ms"
+    );
+
+    setText(
+      "service-kpi-p95",
+      fixed(
+        response.p95,
+        2
+      ) + " ms"
+    );
+
+    setText(
+      "service-kpi-p99",
+      fixed(
+        response.p99,
+        2
+      ) + " ms"
+    );
+
+    setText(
+      "service-kpi-throughput",
+      fixed(
+        item.throughput_req_per_sec,
+        3
+      ) + " req/s"
+    );
+  }}
+
+  function escapeText(value) {{
+    return String(
+      value ?? ""
+    )
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;");
+  }}
+
+  function lineChart(
+    containerId,
+    points,
+    field,
+    unit,
+    colorVariable
+  ) {{
+    const container =
+      document.getElementById(
+        containerId
+      );
+
+    if (!container) {{
+      return;
+    }}
+
+    const valid = points.map(
+      function (point) {{
+        const raw =
+          point[field];
+
+        return {{
+          second:
+            Number(
+              point.second || 0
+            ),
+          value:
+            raw === null
+            || raw === undefined
+              ? null
+              : Number(raw),
+        }};
+      }}
+    );
+
+    const numeric =
+      valid.filter(
+        function (point) {{
+          return (
+            point.value !== null
+            && Number.isFinite(
+              point.value
+            )
+          );
+        }}
+      );
+
+    if (!numeric.length) {{
+      container.innerHTML =
+        '<div class="chart-empty">'
+        + 'No data available'
+        + '</div>';
+
+      return;
+    }}
+
+    const width = 900;
+    const height = 280;
+
+    const left = 62;
+    const right = 22;
+    const top = 24;
+    const bottom = 42;
+
+    const plotWidth =
+      width - left - right;
+
+    const plotHeight =
+      height - top - bottom;
+
+    const maxValue = Math.max(
+      ...numeric.map(
+        function (point) {{
+          return point.value;
+        }}
+      ),
+      1
+    );
+
+    const maxY =
+      maxValue * 1.12;
+
+    const maxSecond = Math.max(
+      ...valid.map(
+        function (point) {{
+          return point.second;
+        }}
+      ),
+      1
+    );
+
+    function x(second) {{
+      return (
+        left
+        + (
+          second
+          / maxSecond
+        )
+        * plotWidth
+      );
+    }}
+
+    function y(value) {{
+      return (
+        top
+        + plotHeight
+        - (
+          value
+          / maxY
+        )
+        * plotHeight
+      );
+    }}
+
+    const lineColor =
+      css(
+        colorVariable,
+        "#58a6ff"
+      );
+
+    const gridColor =
+      css(
+        "--report-grid",
+        "#303844"
+      );
+
+    const textColor =
+      css(
+        "--report-axis-text",
+        "#8d98a6"
+      );
+
+    let grid = "";
+
+    for (
+      let tick = 0;
+      tick <= 4;
+      tick += 1
+    ) {{
+      const value =
+        maxY
+        * tick
+        / 4;
+
+      const py =
+        y(value);
+
+      grid +=
+        '<line x1="' + left
+        + '" y1="' + py
+        + '" x2="' + (width - right)
+        + '" y2="' + py
+        + '" stroke="' + gridColor
+        + '" stroke-width="1"/>';
+
+      grid +=
+        '<text x="' + (left - 10)
+        + '" y="' + (py + 4)
+        + '" text-anchor="end"'
+        + ' font-size="11"'
+        + ' fill="' + textColor
+        + '">'
+        + escapeText(
+          value.toFixed(
+            value >= 100 ? 0 : 1
+          )
+        )
+        + '</text>';
+    }}
+
+    let xTicks = "";
+
+    const xStep = Math.max(
+      Math.ceil(
+        valid.length / 6
+      ),
+      1
+    );
+
+    for (
+      let index = 0;
+      index < valid.length;
+      index += xStep
+    ) {{
+      const point =
+        valid[index];
+
+      xTicks +=
+        '<text x="' + x(point.second)
+        + '" y="' + (height - 12)
+        + '" text-anchor="middle"'
+        + ' font-size="11"'
+        + ' fill="' + textColor
+        + '">'
+        + escapeText(
+          point.second + "s"
+        )
+        + '</text>';
+    }}
+
+    const pathPoints =
+      numeric.map(
+        function (point) {{
+          return (
+            x(point.second)
+            + ","
+            + y(point.value)
+          );
+        }}
+      )
+      .join(" ");
+
+    const areaPoints =
+      left
+      + ","
+      + (top + plotHeight)
+      + " "
+      + pathPoints
+      + " "
+      + x(
+        numeric[
+          numeric.length - 1
+        ].second
+      )
+      + ","
+      + (top + plotHeight);
+
+    container.innerHTML =
+      '<svg viewBox="0 0 '
+      + width
+      + ' '
+      + height
+      + '" role="img">'
+      + grid
+      + xTicks
+      + '<polygon points="'
+      + areaPoints
+      + '" fill="'
+      + lineColor
+      + '" opacity="0.10"/>'
+      + '<polyline points="'
+      + pathPoints
+      + '" fill="none" stroke="'
+      + lineColor
+      + '" stroke-width="2.5"'
+      + ' stroke-linecap="round"'
+      + ' stroke-linejoin="round"/>'
+      + '<text x="'
+      + left
+      + '" y="15"'
+      + ' font-size="11"'
+      + ' fill="'
+      + textColor
+      + '">'
+      + escapeText(unit)
+      + '</text>'
+      + '</svg>';
+  }}
+
+  function renderCharts(item) {{
+    const series =
+      Array.isArray(
+        item.time_series
+      )
+        ? item.time_series
+        : [];
+
+    lineChart(
+      "service-response-chart",
+      series,
+      "avg_response_ms",
+      "Average response time (ms)",
+      "--report-response"
+    );
+
+    lineChart(
+      "service-throughput-chart",
+      series,
+      "throughput_req_per_sec",
+      "Throughput (req/s)",
+      "--report-throughput"
+    );
+
+    lineChart(
+      "service-error-chart",
+      series,
+      "error_rate_pct",
+      "Error rate (%)",
+      "--report-error"
+    );
+  }}
+
+  function render() {{
+    const item =
+      selectedItem();
+
+    updateKpis(item);
+    renderCharts(item);
+  }}
+
+  items.forEach(
+    function (item, index) {{
+      const option =
+        document.createElement(
+          "option"
+        );
+
+      option.value =
+        String(index);
+
+      option.textContent =
+        item.label
+        || (
+          index === 0
+            ? "All Transactions"
+            : "Unnamed Transaction"
+        );
+
+      selector.appendChild(
+        option
+      );
+    }}
+  );
+
+  selector.addEventListener(
+    "change",
+    render
+  );
+
+  const themeToggle =
+    document.getElementById(
+      "theme-toggle"
+    );
+
+  if (themeToggle) {{
+    themeToggle.addEventListener(
+      "click",
+      function () {{
+        window.requestAnimationFrame(
+          render
+        );
+      }}
+    );
+  }}
+
+  render();
+}})();
+</script>
+
 </body>
 </html>
 """.format(
@@ -800,6 +2633,9 @@ def build_html(
         error_chart=error_chart,
         checks_rows=checks_rows,
         errors_rows=errors_rows,
+        transaction_rows=transaction_rows,
+        transaction_error_rows=transaction_error_rows,
+        service_dashboard_json=service_dashboard_json,
         recommendations=recommendations_html,
     )
 

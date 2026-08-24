@@ -1,0 +1,82 @@
+{
+  "schema_version": "1.1",
+  "scenario_candidate": {
+    "id": "booking-updatebooking-dependency-dependency-flow",
+    "type": "DEPENDENCY_FLOW"
+  },
+  "data_strategy": "CSV",
+  "csv": {
+    "file": "/Users/amatosya/perfomance/demo-agent-perf/data/restful-booker/booking-update/test-data.csv",
+    "delimiter": ",",
+    "encoding": "utf-8",
+    "recycle": null,
+    "stop_thread_on_eof": null,
+    "sharing_mode": null
+  },
+  "parameters": [
+    {
+      "name": "firstname",
+      "type": "STRING",
+      "required": true,
+      "source": "REQUEST_BODY",
+      "request_id": "Booking/UpdateBooking",
+      "location": "$.firstname"
+    },
+    {
+      "name": "lastname",
+      "type": "STRING",
+      "required": true,
+      "source": "REQUEST_BODY",
+      "request_id": "Booking/UpdateBooking",
+      "location": "$.lastname"
+    },
+    {
+      "name": "totalprice",
+      "type": "INTEGER",
+      "required": true,
+      "source": "REQUEST_BODY",
+      "request_id": "Booking/UpdateBooking",
+      "location": "$.totalprice"
+    },
+    {
+      "name": "depositpaid",
+      "type": "BOOLEAN",
+      "required": true,
+      "source": "REQUEST_BODY",
+      "request_id": "Booking/UpdateBooking",
+      "location": "$.depositpaid"
+    },
+    {
+      "name": "checkin",
+      "type": "STRING",
+      "required": true,
+      "source": "REQUEST_BODY",
+      "request_id": "Booking/UpdateBooking",
+      "location": "$.bookingdates.checkin"
+    },
+    {
+      "name": "checkout",
+      "type": "STRING",
+      "required": true,
+      "source": "REQUEST_BODY",
+      "request_id": "Booking/UpdateBooking",
+      "location": "$.bookingdates.checkout"
+    },
+    {
+      "name": "additionalneeds",
+      "type": "STRING",
+      "required": true,
+      "source": "REQUEST_BODY",
+      "request_id": "Booking/UpdateBooking",
+      "location": "$.additionalneeds"
+    }
+  ],
+  "governance": {
+    "recycle_policy": "REQUIRES_EXECUTION_PROFILE",
+    "row_capacity_validation": "REQUIRED_BEFORE_EXECUTION",
+    "secrets_in_csv": false,
+    "runtime_correlations_in_csv": false,
+    "configuration_in_csv": false,
+    "scenario_scoped": true
+  }
+}

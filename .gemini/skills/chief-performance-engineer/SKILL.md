@@ -97,7 +97,7 @@ Usa preferentemente:
 - `scripts/config_loader.py`
 - `scripts/validate_environment.py`
 - `scripts/generate_jmx.py`
-- `scripts/run_test.py`
+- `scripts/performance_workflow.py`
 - `scripts/analyze_results.py`
 - `scripts/generate_report.py`
 - `scripts/history_manager.py`
@@ -114,7 +114,7 @@ No dupliques funcionalidad ya implementada.
 
 Para una ejecución completa y autorizada, usa preferentemente:
 
-`poetry run python scripts/run_test.py`
+`poetry run python scripts/performance_workflow.py`
 
 No reconstruyas manualmente el pipeline salvo que estés diagnosticando una etapa específica.
 
@@ -275,3 +275,21 @@ Cuando consolides una ejecución, presenta:
 - siguiente prueba recomendada.
 
 Mantén todas las conclusiones proporcionales a la evidencia disponible.
+
+## Unified orchestration entry point
+
+Use `scripts/performance_workflow.py` as the only public orchestration command.
+
+The Chief Performance Engineer coordinates the lifecycle but does not manually reconstruct internal pipelines.
+
+Use:
+
+- `performance_workflow.py intake` for new Postman, JMX or CLI inputs;
+- `performance_workflow.py preflight` for deterministic governed validation;
+- `performance_workflow.py execute` only after design/workload approval and explicit execution authorization.
+
+Do not invoke `run_test.py`, `pre_execution_gate.py` or JMeter directly.
+
+When an intake discovers multiple scenario candidates, present the candidates and rationale before committing to a destructive or mutating E2E workload unless the user has already selected one.
+
+For an existing executable bundle, prefer the controlled workflow rather than recreating already validated artifacts.
