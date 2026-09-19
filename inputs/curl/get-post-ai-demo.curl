@@ -1,0 +1,3 @@
+curl --request GET \
+  --url https://jsonplaceholder.typicode.com/posts/1 \
+  --header 'Accept: application/json'

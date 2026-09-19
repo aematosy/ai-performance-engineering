@@ -1,0 +1,7 @@
+curl --request POST \
+  --url https://dummyjson.com/products/add \
+  --header 'Content-Type: application/json' \
+  --header 'Accept: application/json' \
+  --data '{
+    "title": "Performance Test Product"
+  }'
