@@ -1,14 +1,12 @@
-# Natural Design Command Contract
+# Natural Design Request Contract
 
-Public entrypoint:
+The only public design command is:
 
-scripts/natural_performance_design.sh
+scripts/natural_performance_design_request.sh
 
-For a cURL supplied by the user, invoke one Shell command only.
+Use one non-interactive Shell invocation.
 
-The command must be a single physical line.
-
-Required structured arguments:
+Required request arguments:
 
 --scenario
 --method
@@ -22,14 +20,12 @@ Required structured arguments:
 
 Forbidden:
 
-heredoc
-stdin
-WriteFile
-multiline shell construction
-Markdown fences inside Shell
-positional argument guessing
-input discovery
---help
-manual retries
+- heredoc
+- stdin
+- WriteFile
+- input discovery
+- positional arguments
+- --help
+- manual retries
 
-An existing file may be used only when the user explicitly supplied its path, via --input.
+The public front door owns cURL materialization, contract probing and validation.
