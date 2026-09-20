@@ -350,6 +350,8 @@ class PerformanceUser(HttpUser):
             str(spawn_rate),
             "-t",
             f"{duration}s",
+            "--exit-code-on-error",
+            "0",
             "--csv",
             str(csv_prefix),
             "--html",
