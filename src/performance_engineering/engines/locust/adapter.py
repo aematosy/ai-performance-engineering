@@ -340,6 +340,8 @@ class PerformanceUser(HttpUser):
         )
 
         command = [
+            sys.executable,
+            "-m",
             "locust",
             "-f",
             str(artifact.resolve()),
