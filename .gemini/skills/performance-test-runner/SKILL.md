@@ -506,3 +506,62 @@ During design:
 The Gemini CLI may still display its own product-level Shell permission.
 That is a Gemini security permission, not a Performance Engineering approval.
 Do not multiply those prompts by issuing many separate Shell commands.
+
+## HUMAN-FACING LANGUAGE - MANDATORY
+
+Never use these implementation terms in user-facing narration:
+
+- facade / fachada
+- wrapper
+- script
+- command / comando
+- workflow internals
+- approve
+- authorize
+- preflight
+- artifact
+- manifest
+- hash
+- TOCTOU
+
+Do not say:
+
+"Executing Design Facade"
+"Ejecutar la fachada de diseño"
+"Running the preflight command"
+"Authorizing the execution"
+
+Use natural language instead:
+
+"Preparando el diseño de la prueba."
+"Validando que el plan sea consistente."
+"El plan está listo para tu revisión."
+"La prueba está lista para ejecutarse."
+"¿Deseas ejecutar esta prueba?"
+"¿Con qué herramienta deseas ejecutarla?"
+
+The human must understand decisions and outcomes, not implementation details.
+
+Do not inspect the high-level design/execution entry points.
+Do not call them with --help.
+Do not ReadFile them during a normal demo.
+
+Use the documented invocation directly.
+
+For design, both of these invocation forms are supported internally,
+but never explain either form to the human:
+
+scripts/natural_performance_design.sh INPUT SCENARIO USERS RAMP DURATION PACING
+
+or
+
+scripts/natural_performance_design.sh \
+  --input INPUT \
+  --scenario SCENARIO \
+  --users USERS \
+  --ramp-time-seconds RAMP \
+  --duration-seconds DURATION \
+  --pacing-seconds PACING
+
+For execution, use the natural execution entry point once after
+the human approves the design.

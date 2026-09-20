@@ -4,12 +4,18 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "${ROOT}"
 
-if [ "$#" -lt 1 ]; then
-  echo "Uso interno inválido."
-  exit 2
+SCENARIO=""
+
+if [ "$#" -ge 2 ] && [ "$1" = "--scenario" ]; then
+  SCENARIO="$2"
+elif [ "$#" -ge 1 ]; then
+  SCENARIO="$1"
 fi
 
-SCENARIO="$1"
+if [ -z "${SCENARIO}" ]; then
+  echo "No se pudo determinar qué prueba deseas ejecutar."
+  exit 2
+fi
 
 PLAN="tests/plans/${SCENARIO}/test-plan.yaml"
 WORKSPACE="workspaces/${SCENARIO}"

@@ -4,17 +4,67 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "${ROOT}"
 
-if [ "$#" -lt 6 ]; then
-  echo "Uso interno inválido."
-  exit 2
+INPUT=""
+SCENARIO=""
+USERS=""
+RAMP_UP=""
+DURATION=""
+PACING=""
+
+if [ "$#" -ge 1 ] && [[ "$1" == --* ]]; then
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --input)
+        INPUT="$2"
+        shift 2
+        ;;
+      --scenario)
+        SCENARIO="$2"
+        shift 2
+        ;;
+      --users)
+        USERS="$2"
+        shift 2
+        ;;
+      --ramp-time|--ramp-time-seconds)
+        RAMP_UP="$2"
+        shift 2
+        ;;
+      --duration|--duration-seconds)
+        DURATION="$2"
+        shift 2
+        ;;
+      --pacing|--pacing-seconds)
+        PACING="$2"
+        shift 2
+        ;;
+      *)
+        echo "No se pudo interpretar la solicitud de diseño."
+        exit 2
+        ;;
+    esac
+  done
+else
+  if [ "$#" -lt 6 ]; then
+    echo "No se recibieron todos los datos necesarios para diseñar la prueba."
+    exit 2
+  fi
+
+  INPUT="$1"
+  SCENARIO="$2"
+  USERS="$3"
+  RAMP_UP="$4"
+  DURATION="$5"
+  PACING="$6"
 fi
 
-INPUT="$1"
-SCENARIO="$2"
-USERS="$3"
-RAMP_UP="$4"
-DURATION="$5"
-PACING="$6"
+for VALUE in   "${INPUT}"   "${SCENARIO}"   "${USERS}"   "${RAMP_UP}"   "${DURATION}"   "${PACING}"
+do
+  if [ -z "${VALUE}" ]; then
+    echo "Faltan datos necesarios para diseñar la prueba."
+    exit 2
+  fi
+done
 
 WORKSPACE="workspaces/${SCENARIO}"
 PLAN="tests/plans/${SCENARIO}/test-plan.yaml"
