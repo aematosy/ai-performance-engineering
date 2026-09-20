@@ -11,6 +11,19 @@ import time
 from pathlib import Path
 from typing import Sequence
 
+# PUBLIC_WORKFLOW_SRC_BOOTSTRAP
+_PROJECT_SRC = (
+    Path(__file__).resolve().parents[1]
+    / "src"
+)
+
+if str(_PROJECT_SRC) not in sys.path:
+    sys.path.insert(
+        0,
+        str(_PROJECT_SRC),
+    )
+
+
 from performance_engineering.application.engine_artifact import (
     EngineArtifactError,
     prepare_engine_artifact,
@@ -1098,23 +1111,18 @@ def build_review_command(
 def build_approve_commands(
     args: argparse.Namespace,
 ) -> list[list[str]]:
-    plan = resolve_path(args.plan)
-    jmx = resolve_path(args.jmx)
+    plan = resolve_path(
+        args.plan
+    )
 
     if plan is None:
-        raise WorkflowError("--plan is required.")
-
-    if jmx is None:
-        raise WorkflowError("--jmx is required.")
+        raise WorkflowError(
+            "--plan is required."
+        )
 
     require_file(
         plan,
         "Plan",
-    )
-
-    require_file(
-        jmx,
-        "JMX",
     )
 
     approved_by = str(
@@ -1137,47 +1145,24 @@ def build_approve_commands(
             "--approved-by",
             approved_by,
         ],
-        [
-            *python_command(
-                "refresh_jmx_metadata.py"
-            ),
-            "--plan",
-            str(plan),
-            "--jmx",
-            str(jmx),
-        ],
-        [
-            *python_command(
-                "validate_jmx_artifact.py"
-            ),
-            "--plan",
-            str(plan),
-            "--jmx",
-            str(jmx),
-        ],
     ]
-
 
 def build_authorize_commands(
     args: argparse.Namespace,
 ) -> list[list[str]]:
-    plan = resolve_path(args.plan)
-    jmx = resolve_path(args.jmx)
-
-    if plan is None:
-        raise WorkflowError("--plan is required.")
-
-    if jmx is None:
-        raise WorkflowError("--jmx is required.")
-
-    require_file(
-        plan,
+    plan = require_file(
+        resolve_path(args.plan),
         "Plan",
     )
 
-    require_file(
-        jmx,
-        "JMX",
+    profile = require_file(
+        resolve_path(args.profile),
+        "Execution profile",
+    )
+
+    artifact = require_file(
+        resolve_path(args.artifact),
+        "Engine artifact",
     )
 
     authorized_by = str(
@@ -1213,28 +1198,49 @@ def build_authorize_commands(
             ]
         )
 
-    return [
+    commands = [
         command,
-        [
-            *python_command(
-                "refresh_jmx_metadata.py"
-            ),
-            "--plan",
-            str(plan),
-            "--jmx",
-            str(jmx),
-        ],
-        [
-            *python_command(
-                "validate_jmx_artifact.py"
-            ),
-            "--plan",
-            str(plan),
-            "--jmx",
-            str(jmx),
-        ],
     ]
 
+    engine_name = (
+        read_engine_from_profile(
+            profile
+        )
+    )
+
+    if engine_name == "jmeter":
+        commands.extend(
+            [
+                [
+                    *python_command(
+                        "refresh_jmx_metadata.py"
+                    ),
+                    "--plan",
+                    str(plan),
+                    "--jmx",
+                    str(artifact),
+                ],
+                [
+                    *python_command(
+                        "validate_jmx_artifact.py"
+                    ),
+                    "--plan",
+                    str(plan),
+                    "--jmx",
+                    str(artifact),
+                ],
+            ]
+        )
+
+    elif engine_name == "locust":
+        pass
+
+    else:
+        raise WorkflowError(
+            f"Unsupported engine: {engine_name}"
+        )
+
+    return commands
 
 def run_commands(
     commands: list[list[str]],
@@ -1696,12 +1702,10 @@ def print_contract() -> None:
                 "scripts/review_test_plan.py --strict"
             ),
             "approve": (
-                "scripts/approve_test_plan.py + "
-                "refresh_jmx_metadata.py"
+                "human design/workload approval"
             ),
             "authorize": (
-                "scripts/authorize_execution.py + "
-                "refresh_jmx_metadata.py"
+                "engine-aware execution authorization"
             ),
             "preflight": (
                 "scripts/run_governed_engine.py "
@@ -1905,19 +1909,13 @@ def build_parser() -> argparse.ArgumentParser:
     approve = subparsers.add_parser(
         "approve",
         help=(
-            "Approve design/workload and refresh "
-            "the governed JMX metadata."
+            "Record human approval of the "
+            "reviewed design and workload."
         ),
     )
 
     approve.add_argument(
         "--plan",
-        required=True,
-        type=Path,
-    )
-
-    approve.add_argument(
-        "--jmx",
         required=True,
         type=Path,
     )
@@ -1930,8 +1928,8 @@ def build_parser() -> argparse.ArgumentParser:
     authorize = subparsers.add_parser(
         "authorize",
         help=(
-            "Authorize controlled execution and "
-            "refresh governed JMX metadata."
+            "Record explicit human authorization "
+            "for the selected performance engine."
         ),
     )
 
@@ -1942,7 +1940,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     authorize.add_argument(
-        "--jmx",
+        "--profile",
+        required=True,
+        type=Path,
+    )
+
+    authorize.add_argument(
+        "--artifact",
         required=True,
         type=Path,
     )

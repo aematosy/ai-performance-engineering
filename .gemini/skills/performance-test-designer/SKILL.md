@@ -171,3 +171,132 @@ For CLI/cURL, PREFLIGHT should use:
 
 A happy-path demo must not intentionally invoke an invalid command in order
 to discover the correct argument contract.
+
+---
+
+# FINAL NATURAL MULTI-ENGINE DEMO CONTRACT
+
+This contract is authoritative for the user-facing demo.
+
+## Natural interaction
+
+The user expresses Performance Engineering intent.
+
+Never require the user to know:
+- PYTHONPATH
+- internal scripts
+- manifests
+- hashes
+- TOCTOU
+- preflight implementation details
+- src/ implementation details
+
+Use the public workflow internally.
+
+## State-aware orchestration
+
+Before executing a governed transition, inspect current state.
+
+If review is already complete, do not repeat it unnecessarily.
+
+If design and workload are already APPROVED, do not approve them again.
+
+If execution is already AUTHORIZED for the current preparation cycle, do not authorize it again unnecessarily.
+
+## Engine selection is mandatory
+
+After human design approval and before preparing the executable artifact:
+
+If the user explicitly requested JMeter, select JMeter.
+
+If the user explicitly requested Locust, select Locust.
+
+If the user did not specify an engine, launch the PUBLIC interactive engine selector.
+
+Never silently choose or reuse an engine merely because execution-profile.yaml already contains one.
+
+The human must see:
+
+PERFORMANCE ENGINE SELECTION
+
+Selecciona el motor que ejecutará esta prueba:
+
+> JMeter
+  Locust
+
+The selected engine must be persisted before artifact preparation.
+
+## Required execution preparation order
+
+Human design approval
+-> engine selection
+-> engine artifact preparation
+-> execution authorization when required
+-> governed validation
+-> final human-facing execution summary
+-> RUN
+-> load execution
+
+JMeter uses a JMX artifact.
+
+Locust uses a locustfile.py artifact.
+
+Never mix artifacts between engines.
+
+## Engine changes
+
+Changing engine after preparation requires a new artifact and a new governed validation cycle.
+
+Never reuse the previous engine manifest or executable artifact.
+
+Historical evidence must not be deleted.
+
+## Mandatory summary before RUN
+
+Before asking for RUN, show clearly:
+
+- scenario
+- selected engine
+- target
+- users
+- ramp-up
+- duration
+- pacing
+- authorization status
+- relevant warnings or gaps
+
+Tell the human explicitly:
+
+"La prueba está lista para ejecutarse con <ENGINE>."
+
+If the human wants another engine, return to engine selection.
+
+## RUN
+
+RUN is only the FINAL human confirmation for real load execution.
+
+RUN is not:
+- design approval
+- engine selection
+- artifact generation
+- execution authorization
+
+The engine must already be selected, prepared and validated before RUN.
+
+Gemini must never type RUN on behalf of the human.
+
+## Design-only requests
+
+For a design request:
+
+intake
+-> design
+-> deterministic validation/review
+-> READY FOR HUMAN REVIEW
+-> STOP
+
+Do not select an engine.
+Do not authorize execution.
+Do not execute load.
+
+After the human approves and asks to continue, start the engine-selection and execution-preparation flow.
