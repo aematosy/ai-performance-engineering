@@ -10,15 +10,41 @@ cd "${ROOT}"
 export PYTHONPATH="${ROOT}/src${PYTHONPATH:+:${PYTHONPATH}}"
 
 SCENARIO=""
+RUN_CONFIRMED="false"
 
-if \
-  [ "$#" -ge 2 ] \
-  && [ "$1" = "--scenario" ]
-then
-  SCENARIO="$2"
-elif [ "$#" -ge 1 ]; then
-  SCENARIO="$1"
-fi
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --scenario)
+      if [ "$#" -lt 2 ]; then
+        echo "Scenario no especificado."
+        exit 2
+      fi
+      SCENARIO="$2"
+      shift 2
+      ;;
+    --run)
+      RUN_CONFIRMED="true"
+      shift
+      ;;
+    RUN)
+      RUN_CONFIRMED="true"
+      shift
+      ;;
+    --*)
+      echo "Opción no soportada: $1"
+      exit 2
+      ;;
+    *)
+      if [ -z "${SCENARIO}" ]; then
+        SCENARIO="$1"
+        shift
+      else
+        echo "Argumento no soportado: $1"
+        exit 2
+      fi
+      ;;
+  esac
+done
 
 if [ -z "${SCENARIO}" ]; then
   echo
@@ -30,9 +56,87 @@ fi
 PLAN="tests/plans/${SCENARIO}/test-plan.yaml"
 WORKSPACE="workspaces/${SCENARIO}"
 PROFILE="${WORKSPACE}/execution-profile.yaml"
+MANIFEST="results/preflight/${SCENARIO}/controlled-engine-v3.json"
 MODEL="${WORKSPACE}/normalized-performance-model.json"
 
 HUMAN="${PERF_HUMAN_NAME:-$(whoami)}"
+
+resume_bundle_is_valid() {
+  local engine="$1"
+  local artifact="$2"
+
+  if [ ! -f "${MANIFEST}" ] || [ ! -f "${artifact}" ]; then
+    return 1
+  fi
+
+  poetry run python - \
+    "${MANIFEST}" \
+    "${PLAN}" \
+    "${PROFILE}" \
+    "${artifact}" \
+    "${engine}" <<'PYCODE'
+from pathlib import Path
+import hashlib
+import json
+import sys
+
+manifest_path = Path(sys.argv[1])
+plan = Path(sys.argv[2]).resolve()
+profile = Path(sys.argv[3]).resolve()
+artifact = Path(sys.argv[4]).resolve()
+engine = sys.argv[5].lower()
+
+
+def sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+
+    with path.open("rb") as stream:
+        for chunk in iter(
+            lambda: stream.read(1024 * 1024),
+            b"",
+        ):
+            digest.update(chunk)
+
+    return digest.hexdigest()
+
+
+try:
+    manifest = json.loads(
+        manifest_path.read_text(
+            encoding="utf-8"
+        )
+    )
+
+    assert manifest.get("schema_version") == "3.0"
+    assert manifest.get("status") == "PRE_EXECUTION_READY"
+    assert manifest.get("execution_performed") is False
+    assert str(manifest.get("engine", "")).lower() == engine
+
+    expected = {
+        "plan": plan,
+        "profile": profile,
+        "engine_artifact": artifact,
+    }
+
+    for key, path in expected.items():
+        record = manifest["inputs"][key]
+
+        assert Path(record["path"]).resolve() == path
+        assert record["sha256"] == sha256(path)
+
+except (
+    AssertionError,
+    KeyError,
+    OSError,
+    ValueError,
+    json.JSONDecodeError,
+):
+    raise SystemExit(1)
+
+raise SystemExit(0)
+PYCODE
+}
+
 
 for REQUIRED in \
   "${PLAN}" \
@@ -108,6 +212,8 @@ fi
 
 echo
 echo "======================================================================"
+fi
+
 echo "RESUMEN FINAL ANTES DE EJECUTAR"
 echo "======================================================================"
 
@@ -259,6 +365,7 @@ echo
 echo "No se modificará el target ni el workload."
 echo
 
+if [ "${RUN_CONFIRMED}" != "true" ]; then
 read -r -p \
   "¿Deseas ejecutar esta prueba? [s/N]: " \
   EXECUTE_CONFIRMATION
@@ -271,6 +378,7 @@ case "${EXECUTE_CONFIRMATION}" in
     echo "Ejecución cancelada."
     echo "No se inició carga."
     exit 0
+fi
     ;;
 esac
 
@@ -320,6 +428,59 @@ then
   exit 2
 fi
 
+FAST_RESUME_READY="false"
+
+ENGINE="$(
+  poetry run python - "${PROFILE}" <<'PYCODE'
+from pathlib import Path
+import sys
+import yaml
+
+profile = yaml.safe_load(
+    Path(sys.argv[1]).read_text(
+        encoding="utf-8"
+    )
+)
+
+print(
+    str(
+        profile.get(
+            "engine",
+            "",
+        )
+    ).strip().lower()
+)
+PYCODE
+)"
+
+case "${ENGINE}" in
+  jmeter)
+    RESUME_ARTIFACT="tests/generated/${SCENARIO}.jmx"
+    ;;
+  locust)
+    RESUME_ARTIFACT="tests/generated/locust/${SCENARIO}/locustfile.py"
+    ;;
+  *)
+    RESUME_ARTIFACT=""
+    ;;
+esac
+
+if \
+  [ -n "${RESUME_ARTIFACT}" ] \
+  && resume_bundle_is_valid \
+       "${ENGINE}" \
+       "${RESUME_ARTIFACT}"
+then
+  FAST_RESUME_READY="true"
+
+  echo
+  echo "[OK] La prueba ya estaba completamente preparada."
+  echo "[OK] Estado PRE_EXECUTION_READY reutilizado."
+  echo "[OK] Motor persistido: ${ENGINE}"
+fi
+
+if [ "${FAST_RESUME_READY}" != "true" ]; then
+
 poetry run python \
   scripts/performance_workflow.py \
   prepare \
@@ -342,22 +503,56 @@ if [ ! -f "${ARTIFACT}" ]; then
   exit 2
 fi
 
-poetry run python \
-  scripts/performance_workflow.py \
-  authorize \
-  --plan "${PLAN}" \
+AUTH_STATUS="$(
+  poetry run python - "${PLAN}" <<'PYCODE'
+from pathlib import Path
+import sys
+import yaml
+
+plan = yaml.safe_load(
+    Path(sys.argv[1]).read_text(
+        encoding="utf-8"
+    )
+)
+
+print(
+    str(
+        plan.get(
+            "authorization",
+            {},
+        ).get(
+            "status",
+            "",
+        )
+    ).upper()
+)
+PYCODE
+)"
+
+if [ "${AUTH_STATUS}" = "AUTHORIZED" ]; then
+  echo
+  echo "[OK] La ejecución ya estaba autorizada."
+  echo "[OK] Authorization already valid; reusing existing state."
+else
+  poetry run python \
+    scripts/performance_workflow.py \
+    authorize \
+    --plan "${PLAN}" \
   --profile "${PROFILE}" \
   --artifact "${ARTIFACT}" \
+      --manifest "${MANIFEST}" \
   --authorized-by "${HUMAN}" \
   --notes \
   "Authorized through the natural Performance Engineering flow."
+fi
 
 poetry run python \
   scripts/performance_workflow.py \
   preflight \
   --plan "${PLAN}" \
   --profile "${PROFILE}" \
-  --artifact "${ARTIFACT}"
+  --artifact "${ARTIFACT}" \
+      --manifest "${MANIFEST}"
 
 echo
 echo "======================================================================"
@@ -376,4 +571,5 @@ printf 'RUN\n' \
       execute \
       --plan "${PLAN}" \
       --profile "${PROFILE}" \
-      --artifact "${ARTIFACT}"
+      --artifact "${ARTIFACT}" \
+      --manifest "${MANIFEST}"
