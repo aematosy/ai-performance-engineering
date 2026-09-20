@@ -42,6 +42,24 @@ class LocustEngine(PerformanceEngine):
                 "expected_status contract."
             )
 
+        if (
+            isinstance(value, str)
+            and value.strip().upper() == "UNRESOLVED"
+        ):
+            raise ValueError(
+                "Locust execution cannot be generated while "
+                "expected_status is UNRESOLVED."
+            )
+
+        if (
+            isinstance(value, str)
+            and value.strip().upper() == "UNRESOLVED"
+        ):
+            raise ValueError(
+                "Locust execution cannot be generated while "
+                "expected_status is UNRESOLVED."
+            )
+
         if isinstance(value, int):
             values = [value]
 
