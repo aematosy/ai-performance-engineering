@@ -1,81 +1,90 @@
 ---
 name: performance-test-designer
-description: Diseña pruebas de Performance Engineering seguras y reproducibles a partir de APIs, OpenAPI, Postman, cURL, HAR, documentación o JMX.
+description: Diseña y valida pruebas de Performance Engineering a partir de APIs, cURL, OpenAPI, Postman, HAR, documentación o JMX, sin ejecutar carga.
 ---
 
 # Performance Test Designer
 
 Responde en español.
 
-## Public entrypoint
+## Única operación pública
 
-Usa únicamente:
+Usa exclusivamente:
 
-`scripts/natural_performance_design.sh`
+scripts/natural_performance_design.sh
 
-## Objetivo
+No inspecciones el script.
+No uses --help.
+No uses heredoc.
+No uses stdin.
+No uses WriteFile.
+No busques archivos curl alternativos.
+No uses formas posicionales.
+No inventes parámetros.
 
-Transformar la intención del usuario en un plan reproducible de performance sin
-ejecutar carga.
+## Si el usuario proporciona un cURL
 
-## Flujo
+Extrae exclusivamente:
 
-1. Recibe el input y workload.
-2. Ejecuta el flujo natural de diseño.
-3. Valida el diseño.
-4. Presenta el resumen.
-5. Si falta el contrato HTTP, intenta resolverlo mediante una única solicitud
-   funcional segura.
-6. Si sigue sin resolverse, pregunta al usuario.
-7. Espera aprobación del diseño y workload.
+- método HTTP;
+- URL;
+- headers;
+- body.
 
-## Functional probe
+Ejecuta UNA sola llamada Shell con esta forma exacta, en una sola línea:
 
-Cuando el HTTP esperado no esté declarado, se permite una single functional
-request.
+scripts/natural_performance_design.sh --scenario "<scenario>" --method "<METHOD>" --url "<URL>" --header "<Header-1: value>" --header "<Header-2: value>" --body '<JSON_BODY_COMPACTO>' --users <users> --ramp-time-seconds <seconds> --duration-seconds <seconds> --pacing-seconds <seconds>
 
-Esa solicitud:
+El JSON de --body debe ir compacto en una sola línea.
 
-- se ejecuta una sola vez;
-- no usa concurrencia;
-- no usa ramp-up;
-- no es una prueba de performance.
+Ejemplo conceptual de body:
 
-Un 2xx observado puede proponerse como contrato esperado.
+{"title":"Performance Test Product"}
 
-Un error o respuesta ambigua no debe convertirse automáticamente en contrato
-de éxito.
+No incluyas delimitadores Markdown como parte del comando.
+No incluyas triple backticks.
+No incluyas etiquetas como text, bash o shell.
+No abras una sesión interactiva.
+No envíes contenido en varias entradas.
 
-## Prohibido
+## Si el usuario proporciona explícitamente un archivo existente
 
-No invoques directamente:
+Usa una única llamada:
 
-- approve
-- authorize
-- prepare
-- preflight
-- execute
-- JMeter
-- Locust
+scripts/natural_performance_design.sh --scenario "<scenario>" --input "<path>" --users <users> --ramp-time-seconds <seconds> --duration-seconds <seconds> --pacing-seconds <seconds>
 
-No uses `--help`.
+Nunca descubras tú otro archivo.
 
-No inspecciones scripts durante una ejecución normal.
+## Responsabilidades internas del entrypoint
 
-No inventes status HTTP.
+El entrypoint realiza internamente:
 
-No ejecutes carga.
+- materialización del cURL;
+- normalización;
+- creación del plan;
+- functional probe cuando el HTTP esperado no está resuelto;
+- sincronización del contrato;
+- validación final;
+- generación del resumen.
+
+Gemini no debe reconstruir ninguno de esos pasos.
 
 ## Resultado
 
-Presenta:
+Si devuelve DESIGN_READY_FOR_REVIEW:
+muestra el resumen y espera aprobación humana.
 
-- scenario;
-- target;
-- workload;
-- SLA;
-- expected HTTP;
-- riesgos;
-- información funcional pendiente.
+Si devuelve DESIGN_NEEDS_FUNCTIONAL_INPUT:
+pregunta únicamente la información funcional pendiente.
 
-Luego espera aprobación humana.
+Si devuelve error técnico:
+repórtalo y detente.
+
+## Prohibido
+
+No invoques directamente approve, authorize, prepare, preflight o execute.
+No invoques performance_workflow.py.
+No invoques JMeter.
+No invoques Locust.
+No hagas retries técnicos manuales.
+No ejecutes carga durante diseño.

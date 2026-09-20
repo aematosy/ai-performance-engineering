@@ -1,19 +1,35 @@
-# Natural Design Contract
+# Natural Design Command Contract
 
 Public entrypoint:
 
-`scripts/natural_performance_design.sh`
+scripts/natural_performance_design.sh
 
-Do not invoke internal workflow operations directly.
+For a cURL supplied by the user, invoke one Shell command only.
 
-Do not inspect `--help`.
+The command must be a single physical line.
 
-Do not execute performance load during design.
+Required structured arguments:
 
-When the expected HTTP status is unknown, one single functional request may be
-used to observe the response safely.
+--scenario
+--method
+--url
+--header
+--body
+--users
+--ramp-time-seconds
+--duration-seconds
+--pacing-seconds
 
-If the response is successful and unambiguous, propose it as the functional
-contract.
+Forbidden:
 
-Otherwise leave the contract unresolved and request human confirmation.
+heredoc
+stdin
+WriteFile
+multiline shell construction
+Markdown fences inside Shell
+positional argument guessing
+input discovery
+--help
+manual retries
+
+An existing file may be used only when the user explicitly supplied its path, via --input.
