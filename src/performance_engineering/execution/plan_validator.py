@@ -134,13 +134,38 @@ def validate_plan(plan: dict[str, Any], plan_path: Path) -> dict[str, Any]:
             raise PlanValidationError(
                 f"transactions[{index}].path must start with '/'."
             )
-        expected = int(
-            require(transaction, "expected_status", f"transactions[{index}]")
+        raw_expected = require(
+            transaction,
+            "expected_status",
+            f"transactions[{index}]",
         )
-        if not 100 <= expected <= 599:
-            raise PlanValidationError(
-                f"transactions[{index}].expected_status is invalid."
-            )
+
+        if (
+            isinstance(raw_expected, str)
+            and raw_expected.strip().upper()
+            == "UNRESOLVED"
+        ):
+            # A design is allowed to remain valid while the
+            # functional HTTP response contract is still pending.
+            #
+            # Execution is responsible for requiring an explicit
+            # HTTP status before engine preparation.
+            pass
+        else:
+            try:
+                expected = int(raw_expected)
+            except (TypeError, ValueError) as exc:
+                raise PlanValidationError(
+                    f"transactions[{index}].expected_status "
+                    "must be an HTTP status between 100 and 599 "
+                    "or UNRESOLVED during design."
+                ) from exc
+
+            if not 100 <= expected <= 599:
+                raise PlanValidationError(
+                    f"transactions[{index}].expected_status "
+                    "must be between 100 and 599."
+                )
 
     authorization = require(plan, "authorization", "root")
     if not isinstance(authorization, dict):

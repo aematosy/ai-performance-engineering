@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -6,14 +7,19 @@ cd "${ROOT}"
 
 SCENARIO=""
 
-if [ "$#" -ge 2 ] && [ "$1" = "--scenario" ]; then
+if \
+  [ "$#" -ge 2 ] \
+  && [ "$1" = "--scenario" ]
+then
   SCENARIO="$2"
 elif [ "$#" -ge 1 ]; then
   SCENARIO="$1"
 fi
 
 if [ -z "${SCENARIO}" ]; then
-  echo "No se pudo determinar qué prueba deseas ejecutar."
+  echo
+  echo "No se pudo determinar qué prueba deseas preparar."
+  echo "No se ejecutó carga."
   exit 2
 fi
 
@@ -24,12 +30,47 @@ MODEL="${WORKSPACE}/normalized-performance-model.json"
 
 HUMAN="${PERF_HUMAN_NAME:-$(whoami)}"
 
-test -f "${PLAN}"
-test -f "${PROFILE}"
-test -f "${MODEL}"
+for REQUIRED in \
+  "${PLAN}" \
+  "${PROFILE}" \
+  "${MODEL}"
+do
+  if [ ! -f "${REQUIRED}" ]; then
+    echo
+    echo "Falta información necesaria para continuar."
+    echo "No se ejecutó carga."
+    exit 2
+  fi
+done
+
+echo
+echo "======================================================================"
+echo "PREPARANDO LA PRUEBA PARA UNA POSIBLE EJECUCIÓN"
+echo "======================================================================"
+echo
+echo "Voy a comprobar que el diseño tenga toda la información"
+echo "funcional necesaria antes de presentar el resumen final."
+echo
+echo "Todavía NO voy a:"
+echo "- ejecutar carga;"
+echo "- seleccionar JMeter o Locust;"
+echo "- cambiar el target;"
+echo "- cambiar el workload aprobado."
+echo "======================================================================"
+echo
+
+# Ask only meaningful functional questions.
+poetry run python \
+  scripts/resolve_response_contract.py \
+  --plan "${PLAN}"
+
+# Validate automatically. No additional human confirmation is needed.
+poetry run python \
+  scripts/validate_test_plan.py \
+  --plan "${PLAN}"
 
 PLAN_STATUS="$(
-  python3 - "${PLAN}" <<'PY'
+  poetry run python - "${PLAN}" <<'PY'
 from pathlib import Path
 import sys
 import yaml
@@ -62,11 +103,11 @@ if [ "${PLAN_STATUS}" != "APPROVED" ]; then
 fi
 
 echo
-echo "============================================================"
-echo "RESUMEN FINAL DE LA PRUEBA"
-echo "============================================================"
+echo "======================================================================"
+echo "RESUMEN FINAL ANTES DE EJECUTAR"
+echo "======================================================================"
 
-python3 - "${PLAN}" <<'PY'
+poetry run python - "${PLAN}" <<'PY'
 from pathlib import Path
 import sys
 import yaml
@@ -88,6 +129,11 @@ metadata = plan.get(
 
 workload = plan.get(
     "workload",
+    {},
+)
+
+params = workload.get(
+    "parameters",
     {},
 )
 
@@ -127,49 +173,86 @@ request_path = tx.get(
     "",
 )
 
+expected = tx.get(
+    "expected_status",
+)
+
+sla = plan.get(
+    "sla",
+    {},
+)
+
 print(
-    f"Scenario : "
+    f"Scenario       : "
     f"{metadata.get('name', path.parent.name)}"
 )
 
 print(
-    f"Target   : "
+    f"Target         : "
     f"{method} "
     f"{protocol}://{host}{request_path}"
 )
 
 print(
-    f"Usuarios : "
-    f"{workload.get('users', workload.get('threads'))}"
+    f"HTTP esperado  : "
+    f"{expected}"
 )
 
 print(
-    f"Ramp-up  : "
-    f"{workload.get('ramp_up_seconds', workload.get('ramp_time_seconds'))} s"
+    f"Usuarios       : "
+    f"{params.get('threads')}"
 )
 
 print(
-    f"Duración : "
-    f"{workload.get('duration_seconds')} s"
+    f"Ramp-up        : "
+    f"{params.get('ramp_time_seconds')} s"
 )
 
 print(
-    f"Pacing   : "
-    f"{workload.get('pacing_seconds')} s"
+    f"Duración       : "
+    f"{params.get('duration_seconds')} s"
 )
 
 print(
-    f"Plan     : "
+    f"Pacing         : "
+    f"{params.get('pacing_seconds')} s"
+)
+
+print(
+    f"Error rate SLA : "
+    f"<= {sla.get('error_rate_threshold_pct')}%"
+)
+
+print(
+    f"p95 SLA        : "
+    f"<= {sla.get('p95_threshold_ms')} ms"
+)
+
+print(
+    f"p99 SLA        : "
+    f"<= {sla.get('p99_threshold_ms')} ms"
+)
+
+print(
+    f"Plan           : "
     f"{plan.get('status')}"
 )
 
 print(
-    f"Workload : "
+    f"Workload       : "
     f"{workload.get('status')}"
 )
 PY
 
-echo "============================================================"
+echo "======================================================================"
+echo
+echo "Si continúas:"
+echo "- elegirás JMeter o Locust;"
+echo "- se preparará el artefacto para esa herramienta;"
+echo "- se ejecutarán las validaciones de seguridad;"
+echo "- y finalmente se iniciará la carga aprobada."
+echo
+echo "No se modificará el target ni el workload."
 echo
 
 read -r -p \
@@ -188,7 +271,9 @@ case "${EXECUTE_CONFIRMATION}" in
 esac
 
 echo
-echo "Selecciona dónde deseas ejecutar la prueba:"
+echo "======================================================================"
+echo "¿CON QUÉ HERRAMIENTA DESEAS EJECUTARLA?"
+echo "======================================================================"
 echo
 
 poetry run python \
@@ -197,7 +282,7 @@ poetry run python \
   --profile "${PROFILE}"
 
 ENGINE="$(
-  python3 - "${PROFILE}" <<'PY'
+  poetry run python - "${PROFILE}" <<'PY'
 from pathlib import Path
 import sys
 import yaml
@@ -216,10 +301,20 @@ print(
             "engine",
             "",
         )
-    ).lower()
+    ).strip().lower()
 )
 PY
 )"
+
+if \
+  [ "${ENGINE}" != "jmeter" ] \
+  && [ "${ENGINE}" != "locust" ]
+then
+  echo
+  echo "No se pudo determinar la herramienta seleccionada."
+  echo "No se ejecutó carga."
+  exit 2
+fi
 
 poetry run python \
   scripts/performance_workflow.py \
@@ -234,13 +329,14 @@ case "${ENGINE}" in
   locust)
     ARTIFACT="tests/generated/locust/${SCENARIO}/locustfile.py"
     ;;
-  *)
-    echo "Motor no soportado: ${ENGINE}"
-    exit 2
-    ;;
 esac
 
-test -f "${ARTIFACT}"
+if [ ! -f "${ARTIFACT}" ]; then
+  echo
+  echo "No se pudo preparar correctamente la prueba."
+  echo "No se ejecutó carga."
+  exit 2
+fi
 
 poetry run python \
   scripts/performance_workflow.py \
@@ -249,7 +345,8 @@ poetry run python \
   --profile "${PROFILE}" \
   --artifact "${ARTIFACT}" \
   --authorized-by "${HUMAN}" \
-  --notes "Authorized through natural Performance Engineering workflow."
+  --notes \
+  "Authorized through the natural Performance Engineering flow."
 
 poetry run python \
   scripts/performance_workflow.py \
@@ -259,18 +356,20 @@ poetry run python \
   --artifact "${ARTIFACT}"
 
 echo
-echo "============================================================"
-echo "TODO VALIDADO"
-echo "============================================================"
-echo "Motor     : $(echo "${ENGINE}" | tr '[:lower:]' '[:upper:]')"
-echo "Estado    : LISTO PARA EJECUTAR"
-echo "============================================================"
+echo "======================================================================"
+echo "VALIDACIONES COMPLETADAS"
+echo "======================================================================"
+echo "Herramienta : $(echo "${ENGINE}" | tr '[:lower:]' '[:upper:]')"
+echo "Estado      : LISTO PARA EJECUTAR"
+echo
+echo "La carga comenzará ahora con los parámetros aprobados."
+echo "======================================================================"
 echo
 
-printf 'RUN\n' | \
-  poetry run python \
-    scripts/performance_workflow.py \
-    execute \
-    --plan "${PLAN}" \
-    --profile "${PROFILE}" \
-    --artifact "${ARTIFACT}"
+printf 'RUN\n' \
+  | poetry run python \
+      scripts/performance_workflow.py \
+      execute \
+      --plan "${PLAN}" \
+      --profile "${PROFILE}" \
+      --artifact "${ARTIFACT}"

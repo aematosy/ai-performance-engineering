@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -10,6 +11,7 @@ USERS=""
 RAMP_UP=""
 DURATION=""
 PACING=""
+EXPECTED_STATUS=""
 
 if [ "$#" -ge 1 ] && [[ "$1" == --* ]]; then
   while [ "$#" -gt 0 ]; do
@@ -38,15 +40,23 @@ if [ "$#" -ge 1 ] && [[ "$1" == --* ]]; then
         PACING="$2"
         shift 2
         ;;
+      --expected-status)
+        EXPECTED_STATUS="$2"
+        shift 2
+        ;;
       *)
+        echo
         echo "No se pudo interpretar la solicitud de diseño."
+        echo "No se ejecutó carga."
         exit 2
         ;;
     esac
   done
 else
   if [ "$#" -lt 6 ]; then
-    echo "No se recibieron todos los datos necesarios para diseñar la prueba."
+    echo
+    echo "Faltan datos para diseñar la prueba."
+    echo "No se ejecutó carga."
     exit 2
   fi
 
@@ -56,12 +66,24 @@ else
   RAMP_UP="$4"
   DURATION="$5"
   PACING="$6"
+
+  if [ "$#" -ge 7 ]; then
+    EXPECTED_STATUS="$7"
+  fi
 fi
 
-for VALUE in   "${INPUT}"   "${SCENARIO}"   "${USERS}"   "${RAMP_UP}"   "${DURATION}"   "${PACING}"
+for VALUE in \
+  "${INPUT}" \
+  "${SCENARIO}" \
+  "${USERS}" \
+  "${RAMP_UP}" \
+  "${DURATION}" \
+  "${PACING}"
 do
   if [ -z "${VALUE}" ]; then
+    echo
     echo "Faltan datos necesarios para diseñar la prueba."
+    echo "No se ejecutó carga."
     exit 2
   fi
 done
@@ -70,9 +92,28 @@ WORKSPACE="workspaces/${SCENARIO}"
 PLAN="tests/plans/${SCENARIO}/test-plan.yaml"
 
 echo
-echo "============================================================"
-echo "DISEÑANDO PRUEBA DE PERFORMANCE"
-echo "============================================================"
+echo "======================================================================"
+echo "PREPARANDO EL DISEÑO DE LA PRUEBA"
+echo "======================================================================"
+echo
+echo "Voy a:"
+echo "- interpretar la API y el workload solicitado;"
+echo "- generar el plan de prueba;"
+echo "- validar que el diseño sea consistente;"
+echo "- mantener el diseño neutral a JMeter y Locust."
+echo
+echo "No voy a:"
+echo "- ejecutar carga;"
+echo "- autorizar una ejecución;"
+echo "- seleccionar JMeter o Locust;"
+echo "- modificar el workload solicitado."
+echo
+echo "Scenario : ${SCENARIO}"
+echo "Usuarios : ${USERS}"
+echo "Ramp-up  : ${RAMP_UP} s"
+echo "Duración : ${DURATION} s"
+echo "Pacing   : ${PACING} s"
+echo "======================================================================"
 echo
 
 poetry run python \
@@ -82,196 +123,91 @@ poetry run python \
   --input-type cli \
   --workspace "${WORKSPACE}" \
   --users "${USERS}" \
-  --ramp-time-seconds "${RAMP_UP}" \
   --duration-seconds "${DURATION}" \
+  --ramp-time-seconds "${RAMP_UP}" \
   --pacing-seconds "${PACING}"
 
-python3 - "${PLAN}" "${SCENARIO}" <<'PY'
-from pathlib import Path
-import shutil
-import sys
-import yaml
+if [ ! -f "${PLAN}" ]; then
+  echo
+  echo "No se pudo generar el plan de prueba."
+  echo "No se ejecutó carga."
+  exit 2
+fi
 
-plan_path = Path(sys.argv[1])
-scenario = sys.argv[2]
+if [ -n "${EXPECTED_STATUS}" ]; then
+  poetry run python \
+    scripts/normalize_design_contract.py \
+    --plan "${PLAN}" \
+    --expected-status "${EXPECTED_STATUS}"
+else
+  poetry run python \
+    scripts/normalize_design_contract.py \
+    --plan "${PLAN}" \
+    --unresolved
+fi
 
-plan = yaml.safe_load(
-    plan_path.read_text(
-        encoding="utf-8"
-    )
-)
+# Design must not retain an active engine-specific executable.
+HISTORY="${WORKSPACE}/design-history/${STAMP:-$(date +%Y%m%d_%H%M%S)}"
 
-transactions = plan.get(
-    "transactions",
-    [],
-)
+JMETER_ARTIFACT="tests/generated/${SCENARIO}.jmx"
+JMETER_METADATA="${JMETER_ARTIFACT}.meta.json"
+LOCUST_DIR="tests/generated/locust/${SCENARIO}"
 
-for transaction in transactions:
-    if not isinstance(
-        transaction,
-        dict,
-    ):
-        continue
+if \
+  [ -f "${JMETER_ARTIFACT}" ] \
+  || [ -f "${JMETER_METADATA}" ] \
+  || [ -d "${LOCUST_DIR}" ]
+then
+  mkdir -p "${HISTORY}"
 
-    transaction["expected_status"] = "UNRESOLVED"
+  if [ -f "${JMETER_ARTIFACT}" ]; then
+    mv \
+      "${JMETER_ARTIFACT}" \
+      "${HISTORY}/"
+  fi
 
-    assertions = transaction.get(
-        "assertions"
-    )
+  if [ -f "${JMETER_METADATA}" ]; then
+    mv \
+      "${JMETER_METADATA}" \
+      "${HISTORY}/"
+  fi
 
-    if isinstance(
-        assertions,
-        list,
-    ):
-        transaction["assertions"] = [
-            item
-            for item in assertions
-            if not (
-                isinstance(
-                    item,
-                    dict,
-                )
-                and str(
-                    item.get("type", "")
-                ).upper()
-                == "RESPONSE_CODE"
-            )
-        ]
-
-observability = plan.get(
-    "observability"
-)
-
-if isinstance(
-    observability,
-    dict,
-):
-    metrics = observability.get(
-        "metrics"
-    )
-
-    if isinstance(
-        metrics,
-        list,
-    ):
-        observability["metrics"] = [
-            item
-            for item in metrics
-            if not (
-                isinstance(
-                    item,
-                    dict,
-                )
-                and "jmeter"
-                in str(
-                    item.get("source", "")
-                ).lower()
-            )
-        ]
-
-plan_path.write_text(
-    yaml.safe_dump(
-        plan,
-        sort_keys=False,
-        allow_unicode=True,
-        width=1000,
-    ),
-    encoding="utf-8",
-)
-
-md_path = plan_path.with_suffix(
-    ".md"
-)
-
-if md_path.is_file():
-    output = []
-
-    for line in md_path.read_text(
-        encoding="utf-8"
-    ).splitlines():
-        if (
-            "JMeter Prometheus Listener"
-            in line
-        ):
-            continue
-
-        if "Expected status:" in line:
-            prefix = line.split(
-                "Expected status:",
-                1,
-            )[0]
-
-            line = (
-                prefix
-                + "Expected status: "
-                + "`UNRESOLVED`"
-            )
-
-        output.append(line)
-
-    md_path.write_text(
-        "\n".join(
-            output
-        ).rstrip()
-        + "\n",
-        encoding="utf-8",
-    )
-
-jmx = Path(
-    "tests/generated"
-) / f"{scenario}.jmx"
-
-if jmx.is_file():
-    history = (
-        Path("workspaces")
-        / scenario
-        / "design-history"
-    )
-
-    history.mkdir(
-        parents=True,
-        exist_ok=True,
-    )
-
-    destination = (
-        history
-        / jmx.name
-    )
-
-    if destination.exists():
-        destination.unlink()
-
-    shutil.move(
-        str(jmx),
-        str(destination),
-    )
-
-    meta = Path(
-        str(jmx)
-        + ".meta.json"
-    )
-
-    if meta.is_file():
-        shutil.move(
-            str(meta),
-            str(
-                history
-                / meta.name
-            ),
-        )
-PY
+  if [ -d "${LOCUST_DIR}" ]; then
+    mv \
+      "${LOCUST_DIR}" \
+      "${HISTORY}/locust"
+  fi
+fi
 
 poetry run python \
   scripts/performance_workflow.py \
   review \
   --plan "${PLAN}"
 
-echo
-echo "============================================================"
-echo "DISEÑO LISTO PARA REVISIÓN HUMANA"
-echo "============================================================"
+# Re-apply canonical design semantics after review so a legacy
+# generator/reviewer cannot reintroduce engine-specific defaults.
+if [ -n "${EXPECTED_STATUS}" ]; then
+  poetry run python \
+    scripts/normalize_design_contract.py \
+    --plan "${PLAN}" \
+    --expected-status "${EXPECTED_STATUS}"
+else
+  poetry run python \
+    scripts/normalize_design_contract.py \
+    --plan "${PLAN}" \
+    --unresolved
+fi
 
-python3 - "${PLAN}" <<'PY'
+poetry run python \
+  scripts/validate_test_plan.py \
+  --plan "${PLAN}"
+
+echo
+echo "======================================================================"
+echo "PLAN LISTO PARA TU REVISIÓN"
+echo "======================================================================"
+
+poetry run python - "${PLAN}" <<'PY'
 from pathlib import Path
 import sys
 import yaml
@@ -293,6 +229,11 @@ metadata = plan.get(
 
 workload = plan.get(
     "workload",
+    {},
+)
+
+params = workload.get(
+    "parameters",
     {},
 )
 
@@ -332,57 +273,107 @@ request_path = tx.get(
     "",
 )
 
+expected = tx.get(
+    "expected_status",
+    "UNRESOLVED",
+)
+
+expected_text = (
+    "Pendiente de definir"
+    if str(expected).upper()
+    == "UNRESOLVED"
+    else str(expected)
+)
+
+sla = plan.get(
+    "sla",
+    {},
+)
+
 print(
-    f"Scenario : "
+    f"Scenario        : "
     f"{metadata.get('name', path.parent.name)}"
 )
 
 print(
-    f"Target   : "
+    f"Target          : "
     f"{method} "
     f"{protocol}://{host}{request_path}"
 )
 
 print(
-    f"Usuarios : "
-    f"{workload.get('users', workload.get('threads'))}"
+    f"Usuarios        : "
+    f"{params.get('threads')}"
 )
 
 print(
-    f"Ramp-up  : "
-    f"{workload.get('ramp_up_seconds', workload.get('ramp_time_seconds'))} s"
+    f"Ramp-up         : "
+    f"{params.get('ramp_time_seconds')} s"
 )
 
 print(
-    f"Duración : "
-    f"{workload.get('duration_seconds')} s"
+    f"Duración        : "
+    f"{params.get('duration_seconds')} s"
 )
 
 print(
-    f"Pacing   : "
-    f"{workload.get('pacing_seconds')} s"
+    f"Pacing          : "
+    f"{params.get('pacing_seconds')} s"
 )
 
 print(
-    f"HTTP     : "
-    f"{tx.get('expected_status', 'UNRESOLVED')}"
+    f"Contrato HTTP   : "
+    f"{expected_text}"
 )
 
 print(
-    f"Plan     : "
+    f"Error rate SLA  : "
+    f"<= {sla.get('error_rate_threshold_pct')}%"
+)
+
+print(
+    f"p95 SLA         : "
+    f"<= {sla.get('p95_threshold_ms')} ms"
+)
+
+print(
+    f"p99 SLA         : "
+    f"<= {sla.get('p99_threshold_ms')} ms"
+)
+
+print(
+    f"Plan            : "
     f"{plan.get('status')}"
 )
 
 print(
-    f"Workload : "
+    f"Workload        : "
     f"{workload.get('status')}"
 )
+
+questions = plan.get(
+    "open_questions",
+    [],
+)
+
+if questions:
+    print()
+    print(
+        "Información pendiente:"
+    )
+
+    for question in questions:
+        print(
+            f"- {question}"
+        )
 PY
 
-echo "============================================================"
 echo
-echo "No se ha seleccionado motor."
-echo "No se ha autorizado ejecución."
-echo "No se ha ejecutado carga."
+echo "---------------------------------------------------------------------"
+echo "No se seleccionó herramienta de ejecución."
+echo "No se autorizó ejecución."
+echo "No se ejecutó carga."
+echo "---------------------------------------------------------------------"
 echo
-echo "Esperando aprobación humana del diseño."
+echo "Revisa el diseño y decide si lo apruebas."
+echo
