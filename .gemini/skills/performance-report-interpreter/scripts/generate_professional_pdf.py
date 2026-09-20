@@ -227,7 +227,7 @@ class ProfessionalPdfReportGenerator:
         canvas.line(18 * mm, 13 * mm, width - 18 * mm, 13 * mm)
         canvas.setFillColor(MUTED)
         canvas.setFont("Helvetica", 7.2)
-        canvas.drawString(18 * mm, 8.5 * mm, "AI-Assisted Performance Engineering")
+        canvas.drawString(18 * mm, 8.5 * mm, "Performance Engineering")
         canvas.drawRightString(width - 18 * mm, 8.5 * mm, f"Página {doc.page}")
         canvas.restoreState()
 
@@ -310,7 +310,7 @@ class ProfessionalPdfReportGenerator:
             topMargin=17 * mm,
             bottomMargin=18 * mm,
             title="Reporte de Prueba de Performance",
-            author="AI-Assisted Performance Engineering",
+            author="Performance Engineering",
         )
         story: list[Any] = []
         m = self.result.metrics
@@ -322,7 +322,7 @@ class ProfessionalPdfReportGenerator:
         # ------------------------------------------------------------------
         # Página 1 - resumen ejecutivo
         # ------------------------------------------------------------------
-        story.append(Paragraph("AI-ASSISTED PERFORMANCE ENGINEERING", self.styles["eyebrow"]))
+        story.append(Paragraph("PERFORMANCE ENGINEERING", self.styles["eyebrow"]))
         story.append(Paragraph("Reporte de Prueba de Performance", self.styles["title"]))
         story.append(Paragraph(
             "Resultados observados durante la prueba y su interpretación.",
@@ -341,12 +341,12 @@ class ProfessionalPdfReportGenerator:
         story.append(hero_meta)
         story.append(Spacer(1, 7))
 
-        conclusion_text = "Baseline válido" if verdict_pass else "Requiere revisión"
+        conclusion_text = "Baseline" if verdict_pass else "Requiere revisión"
         status_cards = Table([
             [
                 Paragraph("RESULTADO", self.styles["card_label"]),
                 Paragraph("RIESGO TÉCNICO", self.styles["card_label"]),
-                Paragraph("USO RECOMENDADO", self.styles["card_label"]),
+                Paragraph("CLASIFICACIÓN", self.styles["card_label"]),
             ],
             [
                 Paragraph(natural_verdict(self.result.verdict), self.styles["card_value"]),
@@ -374,12 +374,12 @@ class ProfessionalPdfReportGenerator:
         story.append(Spacer(1, 7))
 
         observed, meaning, next_step = self._executive_reading()
-        story.append(Paragraph("Lectura ejecutiva", self.styles["section"]))
-        story.append(self._callout("Qué observamos", observed, fill=verdict_fill, accent=verdict_color))
+        story.append(Paragraph("Resumen de resultados", self.styles["section"]))
+        story.append(self._callout("Resultado observado", observed, fill=verdict_fill, accent=verdict_color))
         story.append(Spacer(1, 4))
-        story.append(self._callout("Qué significa", meaning, fill=PALE_BLUE, accent=BLUE))
+        story.append(self._callout("Interpretación", meaning, fill=PALE_BLUE, accent=BLUE))
         story.append(Spacer(1, 4))
-        story.append(self._callout("Siguiente paso recomendado", next_step, fill=PALE_INDIGO, accent=INDIGO))
+        story.append(self._callout("Consideraciones", next_step, fill=PALE_INDIGO, accent=INDIGO))
 
         story.append(Paragraph("Configuración de la prueba", self.styles["section"]))
         story.append(self._table([
@@ -472,7 +472,7 @@ class ProfessionalPdfReportGenerator:
                 header=True,
             ))
 
-        story.append(Paragraph("Conclusión y próximos pasos", self.styles["section"]))
+        story.append(Paragraph("Conclusiones y consideraciones", self.styles["section"]))
         limitations_text = "<br/>".join(f"• {item}" for item in self.result.limitations) or "Sin limitaciones adicionales registradas."
         recommendations = list(self.result.recommendations)
         if verdict_pass:
@@ -481,7 +481,7 @@ class ProfessionalPdfReportGenerator:
 
         closing = Table([[
             Table([
-                [Paragraph("Qué no demuestra esta prueba", self.styles["callout_title"])],
+                [Paragraph("Limitaciones de la ejecución", self.styles["callout_title"])],
                 [Paragraph(limitations_text, self.styles["small"])],
             ], colWidths=[79 * mm], style=TableStyle([
                 ("BACKGROUND", (0, 0), (-1, -1), SURFACE),
@@ -493,7 +493,7 @@ class ProfessionalPdfReportGenerator:
                 ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
             ])),
             Table([
-                [Paragraph("Qué hacer después", self.styles["callout_title"])],
+                [Paragraph("Recomendaciones técnicas", self.styles["callout_title"])],
                 [Paragraph(recommendations_text, self.styles["small"])],
             ], colWidths=[79 * mm], style=TableStyle([
                 ("BACKGROUND", (0, 0), (-1, -1), PALE_BLUE),

@@ -164,14 +164,67 @@ class PerformanceResultInterpreter:
                 pick(r, "throughput"),
             ),
             average_ms=first_number(
-                pick(a, "average", "avg", "avg_response_time", "average_response_time", "response_time.average"),
+                pick(
+                    a,
+                    "response_time_ms.avg",
+                    "average",
+                    "avg",
+                    "avg_response_time",
+                    "average_response_time",
+                    "response_time.average",
+                ),
                 pick(r, "average_ms"),
             ),
-            p50_ms=first_number(pick(a, "p50", "p50_response_time", "percentiles.p50"), pick(r, "p50_ms")),
-            p90_ms=first_number(pick(a, "p90", "p90_response_time", "percentiles.p90"), pick(r, "p90_ms")),
-            p95_ms=first_number(pick(a, "p95", "p95_response_time", "percentiles.p95"), pick(r, "p95_ms")),
-            p99_ms=first_number(pick(a, "p99", "p99_response_time", "percentiles.p99"), pick(r, "p99_ms")),
-            max_ms=first_number(pick(a, "max", "max_response_time", "response_time.max"), pick(r, "max_ms")),
+            p50_ms=first_number(
+                pick(
+                    a,
+                    "response_time_ms.p50",
+                    "p50",
+                    "p50_response_time",
+                    "percentiles.p50",
+                ),
+                pick(r, "p50_ms"),
+            ),
+            p90_ms=first_number(
+                pick(
+                    a,
+                    "response_time_ms.p90",
+                    "p90",
+                    "p90_response_time",
+                    "percentiles.p90",
+                ),
+                pick(r, "p90_ms"),
+            ),
+            p95_ms=first_number(
+                pick(
+                    a,
+                    "response_time_ms.p95",
+                    "p95",
+                    "p95_response_time",
+                    "percentiles.p95",
+                ),
+                pick(r, "p95_ms"),
+            ),
+            p99_ms=first_number(
+                pick(
+                    a,
+                    "response_time_ms.p99",
+                    "p99",
+                    "p99_response_time",
+                    "percentiles.p99",
+                ),
+                pick(r, "p99_ms"),
+            ),
+            max_ms=first_number(
+                pick(
+                    a,
+                    "response_time_ms.max",
+                    "max",
+                    "max_response_time",
+                    "response_time.max",
+                ),
+                pick(r, "max_ms"),
+            ),
         )
 
         workload = Workload(
@@ -188,18 +241,112 @@ class PerformanceResultInterpreter:
         coverage = str(pick(self.evidence, "coverage", default="NOT_AVAILABLE"))
 
         transactions: list[TransactionMetric] = []
-        for item in self.runtime_metrics.get("transactions", []):
-            transactions.append(TransactionMetric(
-                label=str(item.get("label", "UNKNOWN")),
-                samples=int(item.get("requests") or 0),
-                success_rate=float(item.get("success_rate") or 0.0),
-                error_rate=float(item.get("error_rate") or 0.0),
-                average_ms=float(item.get("average_ms") or 0.0),
-                p95_ms=float(item.get("p95_ms") or 0.0),
-                p99_ms=float(item.get("p99_ms") or 0.0),
-                throughput=float(item.get("throughput") or 0.0),
-                status=str(item.get("status") or "UNKNOWN"),
-            ))
+
+        analysis_transactions = (
+            a.get("transactions", [])
+            if isinstance(a, dict)
+            else []
+        )
+
+        transaction_source = (
+            analysis_transactions
+            if analysis_transactions
+            else self.runtime_metrics.get(
+                "transactions",
+                [],
+            )
+        )
+
+        for item in transaction_source:
+            response_time = item.get(
+                "response_time_ms",
+                {},
+            )
+
+            if not isinstance(
+                response_time,
+                dict,
+            ):
+                response_time = {}
+
+            samples = (
+                item.get("samples")
+                or item.get("total_requests")
+                or item.get("requests")
+                or 0
+            )
+
+            success_rate_value = first_number(
+                item.get("success_rate_pct"),
+                item.get("success_rate"),
+            )
+
+            error_rate_value = first_number(
+                item.get("error_rate_pct"),
+                item.get("error_rate"),
+            )
+
+            average_value = first_number(
+                response_time.get("avg"),
+                item.get("average_ms"),
+            )
+
+            p95_value = first_number(
+                response_time.get("p95"),
+                item.get("p95_ms"),
+            )
+
+            p99_value = first_number(
+                response_time.get("p99"),
+                item.get("p99_ms"),
+            )
+
+            throughput_value = first_number(
+                item.get(
+                    "throughput_req_per_sec"
+                ),
+                item.get("throughput"),
+            )
+
+            transactions.append(
+                TransactionMetric(
+                    label=str(
+                        item.get(
+                            "label",
+                            "UNKNOWN",
+                        )
+                    ),
+                    samples=int(samples),
+                    success_rate=float(
+                        success_rate_value
+                        or 0.0
+                    ),
+                    error_rate=float(
+                        error_rate_value
+                        or 0.0
+                    ),
+                    average_ms=float(
+                        average_value
+                        or 0.0
+                    ),
+                    p95_ms=float(
+                        p95_value
+                        or 0.0
+                    ),
+                    p99_ms=float(
+                        p99_value
+                        or 0.0
+                    ),
+                    throughput=float(
+                        throughput_value
+                        or 0.0
+                    ),
+                    status=str(
+                        item.get("status")
+                        or "UNKNOWN"
+                    ),
+                )
+            )
 
         result = Interpretation(
             verdict=verdict,
@@ -324,7 +471,7 @@ def render_markdown(result: Interpretation, coverage: str) -> str:
         "",
         result.executive_summary,
         "",
-        "## ¿Qué significan los números?",
+        "## ¿Interpretaciónn los números?",
         "",
     ]
     lines += [f"- {x}" for x in result.metric_explanations]

@@ -96,7 +96,10 @@ def normalize_expected_status(
     value: Any,
 ) -> list[int]:
     if value is None:
-        return [200]
+        raise CliScenarioError(
+            "Expected HTTP status is not declared. "
+            "An explicit response contract is required."
+        )
 
     values = (
         value

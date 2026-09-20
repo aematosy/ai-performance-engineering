@@ -111,6 +111,21 @@ class JMeterEngine(PerformanceEngine):
             context["runner"]
         ).resolve()
 
+        results_root = Path(
+            context["results_root"]
+        ).resolve()
+
+        results_root.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
+        before = {
+            item.resolve()
+            for item in results_root.iterdir()
+            if item.is_dir()
+        }
+
         command = [
             sys.executable,
             str(runner),
@@ -125,15 +140,48 @@ class JMeterEngine(PerformanceEngine):
 
         self._run(command)
 
-        execution_dir = Path(
-            context["execution_dir"]
-        ).resolve()
+        after = {
+            item.resolve()
+            for item in results_root.iterdir()
+            if item.is_dir()
+        }
 
-        if not execution_dir.exists():
-            raise RuntimeError(
-                "JMeter execution completed but the "
-                "expected execution directory does not exist: "
-                f"{execution_dir}"
+        created = sorted(
+            after - before,
+            key=lambda item: (
+                item.stat().st_mtime_ns,
+                str(item),
+            ),
+        )
+
+        if not created:
+            explicit = context.get(
+                "execution_dir"
             )
 
-        return execution_dir
+            if explicit:
+                execution_dir = Path(
+                    explicit
+                ).resolve()
+
+                if execution_dir.is_dir():
+                    return execution_dir
+
+            raise RuntimeError(
+                "JMeter execution completed but no new "
+                "execution directory was detected under: "
+                f"{results_root}"
+            )
+
+        if len(created) > 1:
+            raise RuntimeError(
+                "JMeter execution produced multiple candidate "
+                "execution directories; cannot determine the "
+                "governed result deterministically: "
+                + ", ".join(
+                    str(item)
+                    for item in created
+                )
+            )
+
+        return created[0]

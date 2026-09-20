@@ -11,6 +11,20 @@ import time
 from pathlib import Path
 from typing import Sequence
 
+from performance_engineering.application.engine_artifact import (
+    EngineArtifactError,
+    prepare_engine_artifact,
+)
+from performance_engineering.application.engine_runtime import (
+    EngineResolutionError,
+    read_engine_from_profile,
+)
+from performance_engineering.application.engine_selection import (
+    EngineSelectionError,
+    describe_selection,
+    select_engine,
+)
+
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
@@ -924,6 +938,62 @@ def resolve_runtime_properties(
 
 
 
+def default_governed_manifest(
+    *,
+    plan: Path,
+) -> Path:
+    """
+    Canonical preflight manifest location for every engine.
+
+    The manifest always belongs to this project:
+      <project>/results/preflight/<scenario>/controlled-engine-v3.json
+    """
+    import yaml
+
+    payload = yaml.safe_load(
+        plan.read_text(
+            encoding="utf-8"
+        )
+    )
+
+    if not isinstance(payload, dict):
+        raise WorkflowError(
+            "Plan must be a YAML object."
+        )
+
+    metadata = payload.get(
+        "metadata"
+    )
+
+    if not isinstance(
+        metadata,
+        dict,
+    ):
+        raise WorkflowError(
+            "Plan metadata is required."
+        )
+
+    scenario = str(
+        metadata.get(
+            "name",
+            ""
+        )
+    ).strip()
+
+    if not scenario:
+        raise WorkflowError(
+            "Plan metadata.name is required."
+        )
+
+    return (
+        ROOT
+        / "results"
+        / "preflight"
+        / scenario
+        / "controlled-engine-v3.json"
+    ).resolve()
+
+
 def build_controlled_command(
     args: argparse.Namespace,
     mode: str,
@@ -938,199 +1008,31 @@ def build_controlled_command(
         "Execution profile",
     )
 
-    jmx = require_file(
-        resolve_path(args.jmx),
-        "JMX",
-    )
-
-    csv_path = resolve_path(
-        args.csv
-    )
-
-    data_requirements = resolve_path(
-        args.data_requirements
-    )
-
-    design_context = resolve_path(
-        args.design_context
-    )
-
-    explicit_properties = resolve_path(
-        args.properties
+    artifact = require_file(
+        resolve_path(args.artifact),
+        "Engine artifact",
     )
 
     manifest = resolve_path(
         args.manifest
     )
 
-    data_contract: dict[str, Any] | None = None
-
-    if data_requirements is not None:
-        require_file(
-            data_requirements,
-            "Data requirements",
+    if manifest is None:
+        manifest = default_governed_manifest(
+            plan=plan,
         )
 
-        try:
-            data_contract = json.loads(
-                data_requirements.read_text(
-                    encoding="utf-8"
-                )
-            )
-        except (
-            OSError,
-            json.JSONDecodeError,
-        ) as exc:
-            raise WorkflowError(
-                "Unable to read data requirements: "
-                f"{exc}"
-            ) from exc
-
-        if not isinstance(
-            data_contract,
-            dict,
-        ):
-            raise WorkflowError(
-                "data-requirements.json root "
-                "must be an object."
-            )
-
-    if (
-        csv_path is not None
-        and not csv_path.is_file()
-    ):
-        strategy = ""
-
-        fields: list[Any] = []
-
-        if data_contract is not None:
-            strategy = str(
-                data_contract.get(
-                    "strategy",
-                    "",
-                )
-            ).strip().upper()
-
-            raw_fields = (
-                data_contract.get(
-                    "fields",
-                    [],
-                )
-            )
-
-            if isinstance(
-                raw_fields,
-                list,
-            ):
-                fields = raw_fields
-
-        # A caller may supply the conventional CSV path even
-        # for a scenario that explicitly has no data file.
-        # This is not a blocking condition.
-        if (
-            strategy == "NONE"
-            and not fields
-        ):
-            print(
-                "[INFO] CSV not required by "
-                "data contract; optional --csv "
-                "path will be ignored."
-            )
-            csv_path = None
-
-        else:
-            require_file(
-                csv_path,
-                "CSV",
-            )
-
-    if (
-        csv_path is not None
-        and data_requirements is None
-    ):
-        raise WorkflowError(
-            "CSV requires --data-requirements."
-        )
-
-    if design_context is not None:
-        require_file(
-            design_context,
-            "Design context",
-        )
-
-    if (
-        design_context is not None
-        and data_requirements is None
-    ):
-        raise WorkflowError(
-            "Design context requires "
-            "--data-requirements."
-        )
-
-    properties = resolve_runtime_properties(
-        project_root=(
-            Path(__file__)
-            .resolve()
-            .parents[1]
-        ),
-        data_requirements=(
-            data_requirements
-        ),
-        explicit_properties=(
-            explicit_properties
-        ),
+    manifest.parent.mkdir(
+        parents=True,
+        exist_ok=True,
     )
 
-    if properties is not None:
-        require_file(
-            properties,
-            "JMeter properties",
-        )
-
-    # Preserve the existing fail-closed secret gate.
-    if data_contract is not None:
-        required_jmeter_properties = [
-            item
-            for item in data_contract.get(
-                "secrets",
-                [],
-            )
-            if (
-                isinstance(item, dict)
-                and str(
-                    item.get(
-                        "source",
-                        "",
-                    )
-                ).upper()
-                == "JMETER_PROPERTY"
-            )
-        ]
-
-        if (
-            required_jmeter_properties
-            and properties is None
-        ):
-            names = ", ".join(
-                str(
-                    item.get(
-                        "name",
-                        "<UNKNOWN>",
-                    )
-                )
-                for item
-                in required_jmeter_properties
-            )
-
-            raise WorkflowError(
-                "Execution requires --properties "
-                "because the data contract declares "
-                "JMETER_PROPERTY secrets: "
-                f"{names}"
-            )
+    execution_dir = resolve_path(
+        args.execution_dir
+    )
 
     command = python_command(
-        "run_approved_plan.py"
+        "run_governed_engine.py"
     )
 
     command.extend(
@@ -1139,39 +1041,17 @@ def build_controlled_command(
             str(plan),
             "--profile",
             str(profile),
-            "--jmx",
-            str(jmx),
+            "--artifact",
+            str(artifact),
+            "--manifest",
+            str(manifest),
         ]
     )
 
     add_optional_path(
         command,
-        "--csv",
-        csv_path,
-    )
-
-    add_optional_path(
-        command,
-        "--data-requirements",
-        data_requirements,
-    )
-
-    add_optional_path(
-        command,
-        "--design-context",
-        design_context,
-    )
-
-    add_optional_path(
-        command,
-        "--properties",
-        properties,
-    )
-
-    add_optional_path(
-        command,
-        "--manifest",
-        manifest,
+        "--execution-dir",
+        execution_dir,
     )
 
     if mode == "preflight":
@@ -1190,7 +1070,6 @@ def build_controlled_command(
         )
 
     return command
-
 
 
 def build_review_command(
@@ -1729,6 +1608,68 @@ def generate_professional_report_bundle(
 
 
 
+def run_select_engine(
+    args: argparse.Namespace,
+) -> None:
+    profile = require_file(
+        resolve_path(args.profile),
+        "Execution profile",
+    )
+
+    selected = select_engine(
+        profile_path=profile,
+        requested_engine=args.engine,
+    )
+
+    describe_selection(
+        profile_path=profile,
+        engine_name=selected,
+    )
+
+
+def run_prepare_engine(
+    args: argparse.Namespace,
+) -> None:
+    profile = require_file(
+        resolve_path(args.profile),
+        "Execution profile",
+    )
+
+    model = require_file(
+        resolve_path(args.model),
+        "Normalized performance model",
+    )
+
+    output = resolve_path(
+        args.output
+    )
+
+    result = prepare_engine_artifact(
+        project_root=ROOT,
+        model_path=model,
+        profile_path=profile,
+        output_path=output,
+    )
+
+    print()
+    print("=" * 78)
+    print("ENGINE ARTIFACT PREPARED")
+    print("=" * 78)
+
+    for key in (
+        "engine",
+        "scenario",
+        "artifact",
+        "status",
+    ):
+        print(
+            f"{key.title():<10}: "
+            f"{result[key]}"
+        )
+
+    print("=" * 78)
+
+
 def print_contract() -> None:
     payload = {
         "schema_version": "1.0",
@@ -1738,6 +1679,8 @@ def print_contract() -> None:
         "operations": [
             "intake",
             "review",
+            "select-engine",
+            "prepare",
             "approve",
             "authorize",
             "preflight",
@@ -1761,11 +1704,11 @@ def print_contract() -> None:
                 "refresh_jmx_metadata.py"
             ),
             "preflight": (
-                "scripts/run_approved_plan.py "
+                "scripts/run_governed_engine.py "
                 "--preflight"
             ),
             "execute": (
-                "scripts/run_approved_plan.py "
+                "scripts/run_governed_engine.py "
                 "--execute"
             ),
         },
@@ -1777,7 +1720,7 @@ def print_contract() -> None:
             "workload_overrides": False,
             "authorization_bypass": False,
             "secret_values_logged": False,
-            "jmeter_direct_execution": False,
+            "engine_direct_execution": False,
         },
     }
 
@@ -1907,6 +1850,58 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
     )
 
+    select_engine_parser = subparsers.add_parser(
+        "select-engine",
+        help=(
+            "Select and persist the performance engine "
+            "for the governed execution profile."
+        ),
+    )
+
+    select_engine_parser.add_argument(
+        "--profile",
+        required=True,
+        type=Path,
+    )
+
+    select_engine_parser.add_argument(
+        "--engine",
+        choices=(
+            "jmeter",
+            "locust",
+        ),
+        help=(
+            "Explicit engine for non-interactive use. "
+            "When omitted in a terminal, an interactive "
+            "selector is displayed."
+        ),
+    )
+
+    prepare = subparsers.add_parser(
+        "prepare",
+        help=(
+            "Generate and validate the executable artifact "
+            "for the engine persisted in the execution profile."
+        ),
+    )
+
+    prepare.add_argument(
+        "--model",
+        required=True,
+        type=Path,
+    )
+
+    prepare.add_argument(
+        "--profile",
+        required=True,
+        type=Path,
+    )
+
+    prepare.add_argument(
+        "--output",
+        type=Path,
+    )
+
     approve = subparsers.add_parser(
         "approve",
         help=(
@@ -1968,7 +1963,7 @@ def build_parser() -> argparse.ArgumentParser:
         command = subparsers.add_parser(
             name,
             help=(
-                "Run the controlled governed execution "
+                "Run the governed multi-engine execution "
                 f"workflow in {name} mode."
             ),
         )
@@ -1986,33 +1981,22 @@ def build_parser() -> argparse.ArgumentParser:
         )
 
         command.add_argument(
-            "--jmx",
+            "--artifact",
             required=True,
             type=Path,
-        )
-
-        command.add_argument(
-            "--csv",
-            type=Path,
-        )
-
-        command.add_argument(
-            "--data-requirements",
-            type=Path,
-        )
-
-        command.add_argument(
-            "--design-context",
-            type=Path,
-        )
-
-        command.add_argument(
-            "--properties",
-            type=Path,
+            help=(
+                "Validated executable artifact selected "
+                "by the persisted engine."
+            ),
         )
 
         command.add_argument(
             "--manifest",
+            type=Path,
+        )
+
+        command.add_argument(
+            "--execution-dir",
             type=Path,
         )
 
@@ -2050,6 +2034,16 @@ def main() -> int:
             )
             run_command(
                 command
+            )
+
+        elif args.operation == "select-engine":
+            run_select_engine(
+                args
+            )
+
+        elif args.operation == "prepare":
+            run_prepare_engine(
+                args
             )
 
         elif args.operation == "approve":
@@ -2171,6 +2165,9 @@ def main() -> int:
 
     except (
         WorkflowError,
+        EngineResolutionError,
+        EngineSelectionError,
+        EngineArtifactError,
         OSError,
     ) as exc:
         print(

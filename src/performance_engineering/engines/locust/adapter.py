@@ -33,17 +33,39 @@ class LocustEngine(PerformanceEngine):
         transaction: dict[str, Any],
     ) -> list[int]:
         value = transaction.get(
-            "expected_status",
-            [200],
+            "expected_status"
         )
 
-        if isinstance(value, int):
-            return [value]
+        if value is None:
+            raise ValueError(
+                "Locust execution requires an explicit "
+                "expected_status contract."
+            )
 
-        return [
-            int(item)
-            for item in value
-        ]
+        if isinstance(value, int):
+            values = [value]
+
+        elif isinstance(value, (list, tuple)):
+            if not value:
+                raise ValueError(
+                    "expected_status must not be empty."
+                )
+
+            values = [
+                int(item)
+                for item in value
+            ]
+
+        else:
+            values = [int(value)]
+
+        for status in values:
+            if not 100 <= status <= 599:
+                raise ValueError(
+                    f"HTTP status outside valid range: {status}"
+                )
+
+        return values
 
     def generate(
         self,
@@ -338,6 +360,57 @@ class PerformanceUser(HttpUser):
             command,
             cwd=self.project_root,
             check=False,
+        )
+
+        metadata = {
+            "engine": "locust",
+            "artifact": str(
+                artifact.resolve()
+            ),
+            "profile": str(
+                profile_path
+            ),
+            "users": users,
+            "ramp_time_seconds": ramp,
+            "duration_seconds": duration,
+            "spawn_rate": spawn_rate,
+        }
+
+        scenario = context.get(
+            "scenario"
+        )
+
+        target = context.get(
+            "target"
+        )
+
+        expected_status = context.get(
+            "expected_status"
+        )
+
+        if scenario:
+            metadata["scenario"] = scenario
+
+        if target:
+            metadata["target"] = target
+
+        if expected_status is not None:
+            metadata[
+                "expected_status"
+            ] = expected_status
+
+        metadata_path = (
+            execution_dir
+            / "metadata.json"
+        )
+
+        metadata_path.write_text(
+            json.dumps(
+                metadata,
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
         )
 
         if completed.returncode != 0:

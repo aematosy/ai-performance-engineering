@@ -208,3 +208,9 @@ reporte_prometheus:
 reportes: reporte_ia reporte_jmeter reporte_intelligence
 
 reportes_completos: reporte_ia reporte_pdf reporte_jmeter reporte_intelligence
+
+# LOCUST_REPORTING
+.PHONY: reporte_locust
+
+reporte_locust:
+	@PYTHONPATH=src poetry run python -m performance_engineering.reporting.locust_reporting --open

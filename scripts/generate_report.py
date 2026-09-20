@@ -238,12 +238,30 @@ def svg_line_chart(
 
 
 
-def format_metric(value, suffix=""):
+def format_metric(
+    value,
+    suffix="",
+    decimals=2,
+):
+    """Format metrics consistently for human-readable reports."""
+
     if value is None:
         return "N/A"
 
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return (
+            html.escape(str(value))
+            + suffix
+        )
+
+    formatted = (
+        f"{number:.{decimals}f}"
+    )
+
     return (
-        html.escape(str(value))
+        html.escape(formatted)
         + suffix
     )
 
@@ -260,8 +278,8 @@ def transaction_table_rows(
     if not transactions:
         return (
             '<tr>'
-            '<td colspan="11" class="muted">'
-            'No transaction-level metrics available.'
+            '<td colspan="10" class="muted">'
+            'No hay métricas por transacción disponibles.'
             '</td>'
             '</tr>'
         )
@@ -269,14 +287,14 @@ def transaction_table_rows(
     rows = []
 
     for tx in transactions:
-        response = tx.get(
-            "response_time_ms",
-            {},
+        response = (
+            tx.get("response_time_ms")
+            or {}
         )
 
-        codes = tx.get(
-            "response_codes",
-            {},
+        codes = (
+            tx.get("response_codes")
+            or {}
         )
 
         codes_text = ", ".join(
@@ -286,19 +304,6 @@ def transaction_table_rows(
             )
             for code, count
             in codes.items()
-        )
-
-        status = str(
-            tx.get(
-                "status",
-                "UNKNOWN",
-            )
-        ).upper()
-
-        status_class = (
-            "status-pass"
-            if status == "PASS"
-            else "status-fail"
         )
 
         rows.append(
@@ -314,9 +319,6 @@ def transaction_table_rows(
                 "<td>{p99}</td>"
                 "<td>{throughput}</td>"
                 "<td>{codes}</td>"
-                '<td class="{status_class}">'
-                "{status}"
-                "</td>"
                 "</tr>"
             ).format(
                 label=html.escape(
@@ -329,46 +331,50 @@ def transaction_table_rows(
                 ),
                 samples=tx.get(
                     "samples",
-                    0,
+                    tx.get(
+                        "total_requests",
+                        0,
+                    ),
                 ),
-                success=tx.get(
-                    "success_rate_pct",
-                    0,
+                success=format_metric(
+                    tx.get(
+                        "success_rate_pct",
+                        0,
+                    ),
+                    decimals=3,
                 ),
-                errors=tx.get(
-                    "error_rate_pct",
-                    0,
+                errors=format_metric(
+                    tx.get(
+                        "error_rate_pct",
+                        0,
+                    ),
+                    decimals=3,
                 ),
                 avg=format_metric(
-                    response.get("avg")
+                    response.get("avg"),
+                    decimals=2,
                 ),
                 p90=format_metric(
-                    response.get("p90")
+                    response.get("p90"),
+                    decimals=2,
                 ),
                 p95=format_metric(
-                    response.get("p95")
+                    response.get("p95"),
+                    decimals=2,
                 ),
                 p99=format_metric(
-                    response.get("p99")
+                    response.get("p99"),
+                    decimals=2,
                 ),
-                throughput=(
-                    format_metric(
-                        tx.get(
-                            "throughput_req_per_sec"
-                        )
-                    )
+                throughput=format_metric(
+                    tx.get(
+                        "throughput_req_per_sec"
+                    ),
+                    decimals=3,
                 ),
                 codes=(
                     codes_text
-                    or "N/A"
-                ),
-                status_class=(
-                    status_class
-                ),
-                status=(
-                    html.escape(
-                        status
-                    )
+                    or "Sin datos"
                 ),
             )
         )
@@ -524,7 +530,7 @@ def build_html(
 
     interactive_payload = {
         "global": {
-            "label": "All Transactions",
+            "label": "Todas las transacciones",
             "samples": metrics.get(
                 "total_requests",
                 0,
@@ -606,7 +612,7 @@ def build_html(
             "<td>{check}</td>"
             "<td>{threshold}</td>"
             "<td>{actual}</td>"
-            '<td class="{status_class}">{status}</td>'
+
             "</tr>"
         ).format(
             check=html.escape(str(check["check"])),
@@ -677,7 +683,7 @@ def build_html(
 <meta charset="UTF-8">
 <meta name="viewport"
       content="width=device-width, initial-scale=1.0">
-<title>Performance Test Report</title>
+<title>Reporte de Prueba de Performance</title>
 
 <style>
   :root {{
@@ -1573,6 +1579,1818 @@ def build_html(
 
   /* FINAL THEME HARDENING v1 */
 
+
+
+
+/* ==========================================================
+   PERFORMANCE REPORT - MODERN UI V4
+   ========================================================== */
+
+:root {{
+  --pe-bg: #f5f8fc;
+  --pe-card: #ffffff;
+  --pe-card-soft: #f8fbff;
+
+  --pe-text: #101828;
+  --pe-text-2: #475467;
+  --pe-muted: #667085;
+
+  --pe-border: #dfe7f2;
+  --pe-border-2: #e9eff7;
+
+  --pe-blue: #2970ff;
+  --pe-blue-soft: #eef4ff;
+
+  --pe-green: #12b76a;
+  --pe-green-soft: #ecfdf3;
+
+  --pe-cyan: #06aed4;
+  --pe-cyan-soft: #ecfdff;
+
+  --pe-orange: #f79009;
+  --pe-orange-soft: #fff7e8;
+
+  --pe-purple: #6938ef;
+  --pe-purple-soft: #f4f0ff;
+
+  --pe-red: #f04438;
+  --pe-red-soft: #fff1f0;
+
+  --pe-shadow:
+    0 8px 28px rgba(16, 24, 40, .055);
+
+  --pe-radius: 16px;
+
+  --background: var(--pe-bg);
+  --surface: var(--pe-card);
+  --border: var(--pe-border);
+  --text: var(--pe-text);
+  --muted: var(--pe-muted);
+  --blue: var(--pe-blue);
+  --green: var(--pe-green);
+  --red: var(--pe-red);
+  --yellow: var(--pe-orange);
+}}
+
+[data-theme="dark"] {{
+  --pe-bg: #09111f;
+  --pe-card: #111c2e;
+  --pe-card-soft: #152238;
+
+  --pe-text: #f7f9fc;
+  --pe-text-2: #c7d2e3;
+  --pe-muted: #98a9c0;
+
+  --pe-border: #243752;
+  --pe-border-2: #1f3049;
+
+  --pe-blue-soft: rgba(41,112,255,.13);
+  --pe-green-soft: rgba(18,183,106,.13);
+  --pe-cyan-soft: rgba(6,174,212,.13);
+  --pe-orange-soft: rgba(247,144,9,.13);
+  --pe-purple-soft: rgba(105,56,239,.14);
+  --pe-red-soft: rgba(240,68,56,.13);
+
+  --pe-shadow:
+    0 12px 30px rgba(0,0,0,.20);
+
+  --background: var(--pe-bg);
+  --surface: var(--pe-card);
+  --border: var(--pe-border);
+  --text: var(--pe-text);
+  --muted: var(--pe-muted);
+}}
+
+
+/* PAGE */
+
+body {{
+  margin: 0;
+
+  color: var(--pe-text);
+
+  background:
+    radial-gradient(
+      circle at 86% 0%,
+      rgba(41,112,255,.07),
+      transparent 24%
+    ),
+    var(--pe-bg);
+
+  font-family:
+    Inter,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+}}
+
+.container {{
+  width: min(
+    1480px,
+    calc(100% - 48px)
+  );
+
+  margin: 0 auto;
+
+  padding:
+    18px
+    0
+    40px;
+}}
+
+
+/* TOP BAR */
+
+.pe-topbar {{
+  height: 66px;
+
+  position: sticky;
+  top: 0;
+  z-index: 100;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  padding:
+    0
+    max(
+      26px,
+      calc((100vw - 1480px) / 2)
+    );
+
+  border-bottom:
+    1px solid var(--pe-border-2);
+
+  background:
+    color-mix(
+      in srgb,
+      var(--pe-card) 94%,
+      transparent
+    );
+
+  backdrop-filter: blur(18px);
+}}
+
+.pe-brand {{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}}
+
+.pe-brand-icon {{
+  width: 38px;
+  height: 38px;
+
+  color: var(--pe-blue);
+}}
+
+.pe-brand-title {{
+  color: var(--pe-text);
+
+  font-size: 16px;
+  font-weight: 850;
+
+  letter-spacing: .015em;
+}}
+
+.pe-brand-subtitle {{
+  margin-top: 2px;
+
+  color: var(--pe-muted);
+
+  font-size: 11px;
+}}
+
+.pe-theme-segment {{
+  display: flex;
+
+  padding: 3px;
+
+  border:
+    1px solid var(--pe-border);
+
+  border-radius: 999px;
+
+  background: var(--pe-card-soft);
+}}
+
+.pe-theme-option {{
+  min-height: 32px;
+
+  display: flex;
+  align-items: center;
+
+  gap: 6px;
+
+  padding:
+    0
+    12px;
+
+  border: 0;
+  border-radius: 999px;
+
+  cursor: pointer;
+
+  color: var(--pe-muted);
+
+  background: transparent;
+
+  font:
+    inherit;
+
+  font-size: 11px;
+  font-weight: 750;
+}}
+
+.pe-theme-option.is-active {{
+  color: var(--pe-blue);
+
+  background: var(--pe-card);
+
+  box-shadow:
+    0 2px 8px rgba(16,24,40,.08);
+}}
+
+.pe-topbar-actions {{
+  margin-right: 150px;
+}}
+
+.report-toolbar {{
+  display: none !important;
+}}
+
+
+/* PDF */
+
+.performance-pdf-export-button-v4,
+a[class*="performance-pdf-export-button"] {{
+  top: 11px !important;
+
+  right:
+    max(
+      26px,
+      calc((100vw - 1480px) / 2)
+    ) !important;
+
+  bottom: auto !important;
+
+  min-height: 42px;
+
+  padding:
+    0
+    19px !important;
+
+  border:
+    0 !important;
+
+  border-radius:
+    999px !important;
+
+  background:
+    linear-gradient(
+      135deg,
+      #2970ff,
+      #6047ff
+    ) !important;
+
+  box-shadow:
+    0 7px 18px
+    rgba(41,112,255,.20)
+    !important;
+
+  font-size:
+    12px !important;
+
+  font-weight:
+    800 !important;
+}}
+
+
+/* HERO */
+
+.header {{
+  min-height: 230px;
+
+  position: relative;
+  overflow: hidden;
+
+  padding:
+    26px
+    28px
+    80px;
+
+  border:
+    1px solid #d7e4f6;
+
+  border-radius:
+    18px;
+
+  background:
+    radial-gradient(
+      circle at 20% -30%,
+      rgba(105,56,239,.08),
+      transparent 34%
+    ),
+    linear-gradient(
+      120deg,
+      #fbfdff,
+      #f4f8ff 54%,
+      #eef5ff
+    );
+
+  box-shadow: var(--pe-shadow);
+}}
+
+[data-theme="dark"] .header {{
+  border-color:
+    #263b5a;
+
+  background:
+    radial-gradient(
+      circle at 20% -30%,
+      rgba(105,56,239,.17),
+      transparent 34%
+    ),
+    linear-gradient(
+      120deg,
+      #132039,
+      #101b30 54%,
+      #12233d
+    );
+}}
+
+.header::before,
+.header::after {{
+  content: "";
+
+  position: absolute;
+
+  border-radius: 50%;
+
+  border-top:
+    2px solid
+    rgba(41,112,255,.24);
+}}
+
+.header::before {{
+  width: 500px;
+  height: 230px;
+
+  right: -70px;
+  bottom: -142px;
+
+  transform:
+    rotate(-5deg);
+}}
+
+.header::after {{
+  width: 445px;
+  height: 210px;
+
+  right: 85px;
+  bottom: -145px;
+
+  border-color:
+    rgba(105,56,239,.20);
+
+  transform:
+    rotate(8deg);
+}}
+
+.header > * {{
+  position: relative;
+  z-index: 2;
+}}
+
+.eyebrow {{
+  display: inline-flex;
+
+  padding:
+    5px
+    11px;
+
+  border-radius:
+    999px;
+
+  color: var(--pe-blue);
+
+  background:
+    var(--pe-blue-soft);
+
+  font-size:
+    9px;
+
+  font-weight:
+    850;
+}}
+
+h1 {{
+  max-width: 900px;
+
+  margin:
+    13px
+    0
+    7px;
+
+  color:
+    var(--pe-text);
+
+  font-size:
+    clamp(
+      31px,
+      3.1vw,
+      42px
+    );
+
+  line-height: 1.05;
+
+  letter-spacing:
+    -.035em;
+}}
+
+.subtitle {{
+  max-width: 760px;
+
+  color:
+    var(--pe-text-2);
+
+  font-size:
+    13px;
+
+  line-height:
+    1.55;
+}}
+
+.verdict {{
+  min-width: 145px;
+
+  padding:
+    12px
+    17px;
+
+  border-radius:
+    15px;
+
+  font-size:
+    14px;
+
+  font-weight:
+    850;
+}}
+
+.verdict-pass {{
+  color:
+    #079455;
+
+  border:
+    1px solid #c7f0dc;
+
+  background:
+    #ecfdf3;
+}}
+
+.verdict-fail {{
+  color:
+    #d92d20;
+
+  border:
+    1px solid #ffd1cd;
+
+  background:
+    #fff1f0;
+}}
+
+[data-theme="dark"]
+.verdict-pass {{
+  color:
+    #6ce9a6;
+
+  border-color:
+    rgba(18,183,106,.32);
+
+  background:
+    rgba(18,183,106,.13);
+}}
+
+
+/* HERO METADATA */
+
+.metadata {{
+  margin:
+    -67px
+    0
+    16px;
+
+  padding:
+    0
+    20px
+    13px;
+
+  position: relative;
+  z-index: 5;
+
+  display: grid;
+
+  grid-template-columns:
+    1fr
+    1.45fr
+    1.25fr
+    1.8fr;
+
+  gap: 10px;
+}}
+
+.metadata-item {{
+  min-width: 0;
+  min-height: 65px;
+
+  padding:
+    12px
+    14px;
+
+  border:
+    1px solid var(--pe-border);
+
+  border-radius:
+    11px;
+
+  background:
+    color-mix(
+      in srgb,
+      var(--pe-card) 91%,
+      transparent
+    );
+
+  backdrop-filter:
+    blur(12px);
+
+  box-shadow: none;
+}}
+
+.metadata-item::before {{
+  display: none;
+}}
+
+.metadata-label {{
+  color:
+    var(--pe-muted);
+
+  font-size:
+    10px;
+
+  font-weight:
+    700;
+
+  text-transform:
+    none;
+}}
+
+.metadata-value {{
+  margin-top:
+    4px;
+
+  color:
+    var(--pe-text);
+
+  font-size:
+    12px;
+
+  font-weight:
+    730;
+
+  line-height:
+    1.35;
+
+  overflow-wrap:
+    anywhere;
+}}
+
+
+/* KPI CARDS */
+
+.cards {{
+  display: grid;
+
+  grid-template-columns:
+    repeat(
+      5,
+      minmax(0,1fr)
+    );
+
+  gap: 12px;
+
+  margin:
+    0
+    0
+    16px;
+}}
+
+.card {{
+  min-height: 120px;
+
+  position: relative;
+  overflow: hidden;
+
+  padding:
+    18px
+    18px
+    18px
+    66px;
+
+  border:
+    1px solid var(--pe-border);
+
+  border-radius:
+    15px;
+
+  background:
+    var(--pe-card);
+
+  box-shadow:
+    var(--pe-shadow);
+}}
+
+.card::before {{
+  position: absolute;
+
+  left: 17px;
+  top: 18px;
+
+  width: 37px;
+  height: 37px;
+
+  display: grid;
+  place-items: center;
+
+  border-radius:
+    50%;
+
+  font-size:
+    20px;
+
+  font-weight:
+    900;
+}}
+
+.card::after {{
+  content: "";
+
+  position: absolute;
+
+  left: 67px;
+  right: 16px;
+  bottom: 14px;
+
+  height: 24px;
+
+  opacity: .95;
+
+  background-repeat:
+    no-repeat;
+
+  background-position:
+    center;
+
+  background-size:
+    100% 100%;
+}}
+
+.cards .card:nth-child(1) {{
+  border-left:
+    3px solid
+    var(--pe-blue);
+}}
+
+.cards .card:nth-child(1)::before {{
+  content: "◎";
+
+  color:
+    var(--pe-blue);
+
+  background:
+    var(--pe-blue-soft);
+}}
+
+.cards .card:nth-child(1)::after {{
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 24'%3E%3Cpolyline points='0,18 18,17 32,11 49,15 66,12 83,16 100,13 117,8 134,15 150,11 180,7' fill='none' stroke='%232970ff' stroke-width='2'/%3E%3C/svg%3E");
+}}
+
+.cards .card:nth-child(2) {{
+  border-left:
+    3px solid
+    var(--pe-green);
+}}
+
+.cards .card:nth-child(2)::before {{
+  content: "✓";
+
+  color:
+    var(--pe-green);
+
+  background:
+    var(--pe-green-soft);
+}}
+
+.cards .card:nth-child(2)::after {{
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 24'%3E%3Cpolyline points='0,18 20,16 33,10 47,18 63,12 77,16 92,11 109,17 128,14 146,18 180,7' fill='none' stroke='%2312b76a' stroke-width='2'/%3E%3C/svg%3E");
+}}
+
+.cards .card:nth-child(3) {{
+  border-left:
+    3px solid
+    var(--pe-cyan);
+}}
+
+.cards .card:nth-child(3)::before {{
+  content: "ϟ";
+
+  color:
+    var(--pe-cyan);
+
+  background:
+    var(--pe-cyan-soft);
+}}
+
+.cards .card:nth-child(3)::after {{
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 24'%3E%3Cpolyline points='0,18 18,13 35,17 51,8 67,16 83,10 100,15 117,12 134,17 153,8 180,15' fill='none' stroke='%2306aed4' stroke-width='2'/%3E%3C/svg%3E");
+}}
+
+.cards .card:nth-child(4) {{
+  border-left:
+    3px solid
+    var(--pe-orange);
+}}
+
+.cards .card:nth-child(4)::before {{
+  content: "◷";
+
+  color:
+    var(--pe-orange);
+
+  background:
+    var(--pe-orange-soft);
+}}
+
+.cards .card:nth-child(4)::after {{
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 24'%3E%3Cpolyline points='0,18 18,15 35,8 54,14 72,17 89,12 108,15 125,9 145,17 180,10' fill='none' stroke='%23f79009' stroke-width='2'/%3E%3C/svg%3E");
+}}
+
+.cards .card:nth-child(5) {{
+  border-left:
+    3px solid
+    var(--pe-purple);
+}}
+
+.cards .card:nth-child(5)::before {{
+  content: "◷";
+
+  color:
+    var(--pe-purple);
+
+  background:
+    var(--pe-purple-soft);
+}}
+
+.cards .card:nth-child(5)::after {{
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 24'%3E%3Cpolyline points='0,17 19,12 35,17 51,8 68,17 84,10 103,15 121,9 140,16 158,9 180,14' fill='none' stroke='%236938ef' stroke-width='2'/%3E%3C/svg%3E");
+}}
+
+.card-label {{
+  color:
+    var(--pe-muted);
+
+  font-size:
+    11px;
+
+  font-weight:
+    650;
+
+  text-transform:
+    none;
+}}
+
+.card-value {{
+  margin-top:
+    5px;
+
+  color:
+    var(--pe-text);
+
+  font-size:
+    27px;
+
+  font-weight:
+    850;
+
+  line-height:
+    1.1;
+
+  white-space:
+    nowrap;
+}}
+
+
+/* GENERIC PANELS */
+
+.panel,
+.service-dashboard,
+.performance-observability-v4 {{
+  border:
+    1px solid
+    var(--pe-border) !important;
+
+  border-radius:
+    var(--pe-radius) !important;
+
+  background:
+    var(--pe-card) !important;
+
+  box-shadow:
+    var(--pe-shadow) !important;
+}}
+
+.panel {{
+  margin-bottom:
+    14px;
+
+  padding:
+    18px;
+}}
+
+.panel h2,
+.service-dashboard h2 {{
+  margin:
+    0
+    0
+    12px;
+
+  color:
+    var(--pe-text);
+
+  font-size:
+    15px;
+
+  font-weight:
+    820;
+}}
+
+
+/* OBSERVABILITY */
+
+.performance-observability-v4 {{
+  margin:
+    0
+    0
+    16px !important;
+
+  padding:
+    18px !important;
+}}
+
+.performance-observability-v4 h2 {{
+  font-size:
+    17px !important;
+
+  color:
+    var(--pe-text) !important;
+}}
+
+.performance-observability-v4 p {{
+  color:
+    var(--pe-muted) !important;
+
+  font-size:
+    12px !important;
+}}
+
+.performance-observability-v4
+.perf-obs-grid {{
+  gap:
+    10px !important;
+}}
+
+.performance-observability-v4
+.perf-obs-link {{
+  min-height:
+    65px;
+
+  position:
+    relative;
+
+  padding:
+    12px
+    42px
+    12px
+    52px !important;
+
+  border:
+    1px solid
+    var(--pe-border) !important;
+
+  border-radius:
+    11px !important;
+
+  background:
+    var(--pe-card-soft) !important;
+}}
+
+.performance-observability-v4
+.perf-obs-link::before {{
+  position:
+    absolute;
+
+  left:
+    15px;
+
+  top:
+    50%;
+
+  transform:
+    translateY(-50%);
+
+  width:
+    28px;
+
+  height:
+    28px;
+
+  display:
+    grid;
+
+  place-items:
+    center;
+
+  border-radius:
+    50%;
+
+  font-weight:
+    900;
+}}
+
+.performance-observability-v4
+.perf-obs-link:nth-child(1)::before {{
+  content: "G";
+
+  color:
+    #f79009;
+
+  background:
+    var(--pe-orange-soft);
+}}
+
+.performance-observability-v4
+.perf-obs-link:nth-child(2)::before {{
+  content: "P";
+
+  color:
+    #e5484d;
+
+  background:
+    var(--pe-red-soft);
+}}
+
+.performance-observability-v4
+.perf-obs-link:nth-child(3)::before {{
+  content: "▥";
+
+  color:
+    var(--pe-purple);
+
+  background:
+    var(--pe-purple-soft);
+}}
+
+.performance-observability-v4
+.perf-obs-link::after {{
+  content: "›";
+
+  position:
+    absolute;
+
+  right:
+    16px;
+
+  top:
+    50%;
+
+  transform:
+    translateY(-50%);
+
+  color:
+    var(--pe-blue);
+
+  font-size:
+    22px;
+}}
+
+.performance-observability-v4
+.perf-obs-link strong {{
+  color:
+    var(--pe-text) !important;
+
+  font-size:
+    12px !important;
+}}
+
+.performance-observability-v4
+.perf-obs-link span {{
+  color:
+    var(--pe-muted) !important;
+
+  font-size:
+    10px !important;
+}}
+
+
+/* TABLES */
+
+.table-scroll {{
+  overflow:
+    auto;
+
+  border:
+    1px solid
+    var(--pe-border-2);
+
+  border-radius:
+    10px;
+}}
+
+table {{
+  width:
+    100%;
+
+  border-collapse:
+    separate;
+
+  border-spacing:
+    0;
+}}
+
+thead th {{
+  padding:
+    10px
+    11px;
+
+  color:
+    #344054;
+
+  background:
+    #eef3f9;
+
+  border-bottom:
+    1px solid
+    var(--pe-border);
+
+  font-size:
+    10px;
+
+  font-weight:
+    800;
+
+  text-transform:
+    none;
+
+  letter-spacing:
+    0;
+
+  white-space:
+    nowrap;
+}}
+
+[data-theme="dark"]
+thead th {{
+  color:
+    #d8e2f0;
+
+  background:
+    #1b2a42;
+}}
+
+tbody td {{
+  padding:
+    10px
+    11px;
+
+  color:
+    var(--pe-text);
+
+  border-bottom:
+    1px solid
+    var(--pe-border-2);
+
+  font-size:
+    11px;
+
+  line-height:
+    1.4;
+}}
+
+tbody tr:last-child td {{
+  border-bottom:
+    0;
+}}
+
+.status-pass {{
+  display:
+    inline-flex;
+
+  padding:
+    3px
+    8px;
+
+  color:
+    #079455 !important;
+
+  border-radius:
+    999px;
+
+  background:
+    #dcfae6;
+
+  font-size:
+    9px;
+
+  font-weight:
+    850;
+}}
+
+.status-fail {{
+  display:
+    inline-flex;
+
+  padding:
+    3px
+    8px;
+
+  color:
+    #d92d20 !important;
+
+  border-radius:
+    999px;
+
+  background:
+    #fee4e2;
+
+  font-size:
+    9px;
+
+  font-weight:
+    850;
+}}
+
+
+/* TWO-COLUMN ANALYSIS GRID */
+
+.pe-analysis-grid {{
+  display:
+    grid;
+
+  grid-template-columns:
+    minmax(0, 2fr)
+    minmax(310px, .95fr);
+
+  gap:
+    14px;
+
+  margin-bottom:
+    16px;
+}}
+
+.pe-analysis-left,
+.pe-analysis-right {{
+  min-width:
+    0;
+}}
+
+.pe-analysis-grid
+.panel {{
+  margin-bottom:
+    14px;
+}}
+
+.pe-analysis-grid
+.panel:last-child {{
+  margin-bottom:
+    0;
+}}
+
+
+/* SERVICE / TRENDS */
+
+.service-dashboard {{
+  padding:
+    18px;
+
+  margin-bottom:
+    16px;
+}}
+
+.service-dashboard-toolbar {{
+  padding-bottom:
+    12px;
+
+  margin-bottom:
+    14px;
+
+  border-bottom:
+    1px solid
+    var(--pe-border-2);
+}}
+
+.service-kpis {{
+  gap:
+    8px;
+}}
+
+.service-kpi {{
+  min-height:
+    70px;
+
+  padding:
+    11px;
+
+  border:
+    1px solid
+    var(--pe-border-2);
+
+  border-radius:
+    10px;
+
+  background:
+    var(--pe-card-soft);
+}}
+
+.service-kpi-label {{
+  color:
+    var(--pe-muted);
+
+  font-size:
+    9px;
+}}
+
+.service-kpi-value {{
+  margin-top:
+    4px;
+
+  color:
+    var(--pe-text);
+
+  font-size:
+    17px;
+
+  font-weight:
+    800;
+}}
+
+.interactive-chart-grid {{
+  display:
+    grid;
+
+  grid-template-columns:
+    repeat(3,minmax(0,1fr));
+
+  gap:
+    10px;
+
+  margin-top:
+    14px;
+}}
+
+.service-chart-panel {{
+  padding:
+    13px;
+
+  border:
+    1px solid
+    var(--pe-border-2);
+
+  border-radius:
+    11px;
+
+  background:
+    var(--pe-card-soft);
+}}
+
+.service-chart-panel h3 {{
+  margin:
+    0
+    0
+    8px;
+
+  color:
+    var(--pe-text);
+
+  font-size:
+    11px;
+}}
+
+.service-chart {{
+  min-height:
+    225px;
+}}
+
+.service-chart svg text {{
+  font-size:
+    10px !important;
+}}
+
+
+/* RECOMMENDATIONS */
+
+.pe-recommendations {{
+  border-color:
+    #ccefdc !important;
+
+  background:
+    linear-gradient(
+      90deg,
+      rgba(18,183,106,.045),
+      transparent
+    ),
+    var(--pe-card) !important;
+}}
+
+.pe-recommendations ul {{
+  display:
+    grid;
+
+  grid-template-columns:
+    repeat(3,minmax(0,1fr));
+
+  gap:
+    10px;
+
+  padding:
+    0;
+
+  margin:
+    0;
+
+  list-style:
+    none;
+}}
+
+.pe-recommendations li {{
+  position:
+    relative;
+
+  padding-left:
+    18px;
+
+  color:
+    var(--pe-text-2);
+
+  font-size:
+    10px;
+}}
+
+.pe-recommendations li::before {{
+  content:
+    "";
+
+  width:
+    7px;
+
+  height:
+    7px;
+
+  position:
+    absolute;
+
+  left:
+    0;
+
+  top:
+    6px;
+
+  border-radius:
+    50%;
+
+  background:
+    var(--pe-green);
+}}
+
+
+/* DARK POLISH */
+
+[data-theme="dark"]
+.performance-observability-v4
+.perf-obs-link,
+[data-theme="dark"]
+.service-kpi,
+[data-theme="dark"]
+.service-chart-panel {{
+  background:
+    var(--pe-card-soft) !important;
+}}
+
+[data-theme="dark"]
+.status-pass {{
+  color:
+    #6ce9a6 !important;
+
+  background:
+    rgba(18,183,106,.14);
+}}
+
+[data-theme="dark"]
+.status-fail {{
+  color:
+    #fda29b !important;
+
+  background:
+    rgba(240,68,56,.15);
+}}
+
+
+/* RESPONSIVE */
+
+@media (max-width: 1150px) {{
+  .cards {{
+    grid-template-columns:
+      repeat(3,minmax(0,1fr));
+  }}
+
+  .metadata {{
+    grid-template-columns:
+      repeat(2,minmax(0,1fr));
+  }}
+
+  .pe-analysis-grid {{
+    grid-template-columns:
+      1fr;
+  }}
+
+  .interactive-chart-grid {{
+    grid-template-columns:
+      1fr;
+  }}
+}}
+
+@media (max-width: 720px) {{
+  .container {{
+    width:
+      min(
+        100% - 20px,
+        1480px
+      );
+  }}
+
+  .header {{
+    padding:
+      22px
+      18px
+      145px;
+  }}
+
+  h1 {{
+    font-size:
+      30px;
+  }}
+
+  .metadata {{
+    margin-top:
+      -132px;
+
+    grid-template-columns:
+      1fr;
+  }}
+
+  .cards {{
+    grid-template-columns:
+      1fr;
+  }}
+
+  .pe-recommendations ul {{
+    grid-template-columns:
+      1fr;
+  }}
+}}
+
+
+/* ==========================================================
+   PERFORMANCE REPORT - ERROR VISUALIZATION V4.1
+   ========================================================== */
+
+/* Response code badges */
+
+.pe-response-codes {{
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 7px;
+}}
+
+.pe-http-code {{
+  min-width: 78px;
+
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  gap: 1px;
+
+  padding: 6px 9px;
+
+  border: 1px solid transparent;
+  border-radius: 10px;
+
+  line-height: 1.15;
+}}
+
+.pe-http-code-name {{
+  font-size: 10px;
+  font-weight: 850;
+}}
+
+.pe-http-code-count {{
+  font-size: 13px;
+  font-weight: 850;
+}}
+
+.pe-http-code-rate {{
+  margin-top: 2px;
+
+  font-size: 9px;
+  font-weight: 650;
+  opacity: .9;
+}}
+
+
+/* 2xx */
+
+.pe-http-code-success {{
+  color: #079455;
+  border-color: #c8efdc;
+  background: #ecfdf3;
+}}
+
+
+/* 3xx */
+
+.pe-http-code-redirect {{
+  color: #175cd3;
+  border-color: #c7d7fe;
+  background: #eff4ff;
+}}
+
+
+/* 4xx */
+
+.pe-http-code-client {{
+  color: #b54708;
+  border-color: #fedf89;
+  background: #fffaeb;
+}}
+
+
+/* 5xx */
+
+.pe-http-code-server {{
+  color: #d92d20;
+  border-color: #fecdca;
+  background: #fef3f2;
+}}
+
+
+/* Transaction with errors */
+
+.pe-transaction-failed td {{
+  background:
+    linear-gradient(
+      90deg,
+      rgba(240, 68, 56, .040),
+      transparent 75%
+    );
+}}
+
+.pe-transaction-failed td:first-child {{
+  box-shadow:
+    inset 3px 0 0 #f04438;
+}}
+
+
+/* Status badge */
+
+}}
+
+}}
+
+
+/* Error panel */
+
+.pe-transaction-errors.pe-has-errors {{
+  position: relative;
+
+  border-color: #fecdca !important;
+
+  background:
+    linear-gradient(
+      180deg,
+      rgba(240, 68, 56, .025),
+      transparent 45%
+    ),
+    var(--pe-card) !important;
+}}
+
+.pe-transaction-errors.pe-has-errors h2 {{
+  color: var(--pe-text);
+}}
+
+
+/* Error code in detailed table */
+
+.pe-error-code-badge {{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  min-width: 44px;
+
+  padding: 4px 9px;
+
+  border-radius: 999px;
+
+  color: #d92d20;
+
+  background: #fee4e2;
+
+  font-weight: 850;
+}}
+
+
+/* Error summary alert */
+
+.pe-error-alert {{
+  margin-top: 13px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 16px;
+
+  padding: 12px 15px;
+
+  border: 1px solid #fda29b;
+  border-radius: 12px;
+
+  background:
+    linear-gradient(
+      90deg,
+      #fff1f0,
+      #fff8f7
+    );
+}}
+
+.pe-error-alert-content {{
+  min-width: 0;
+
+  display: flex;
+  align-items: center;
+
+  gap: 12px;
+}}
+
+.pe-error-alert-icon {{
+  width: 34px;
+  height: 34px;
+
+  flex: 0 0 auto;
+
+  display: grid;
+  place-items: center;
+
+  border-radius: 50%;
+
+  color: #fff;
+  background: #f04438;
+
+  font-size: 19px;
+  font-weight: 900;
+}}
+
+.pe-error-alert-title {{
+  color: #d92d20;
+
+  font-size: 12px;
+  font-weight: 850;
+}}
+
+.pe-error-alert-description {{
+  margin-top: 2px;
+
+  color: #667085;
+
+  font-size: 10px;
+  line-height: 1.4;
+}}
+
+
+/* Dark mode */
+
+[data-theme="dark"] .pe-http-code-success {{
+  color: #6ce9a6;
+
+  border-color:
+    rgba(18, 183, 106, .30);
+
+  background:
+    rgba(18, 183, 106, .12);
+}}
+
+[data-theme="dark"] .pe-http-code-redirect {{
+  color: #84adff;
+
+  border-color:
+    rgba(41, 112, 255, .32);
+
+  background:
+    rgba(41, 112, 255, .13);
+}}
+
+[data-theme="dark"] .pe-http-code-client {{
+  color: #fec84b;
+
+  border-color:
+    rgba(247, 144, 9, .30);
+
+  background:
+    rgba(247, 144, 9, .12);
+}}
+
+[data-theme="dark"] .pe-http-code-server {{
+  color: #fda29b;
+
+  border-color:
+    rgba(240, 68, 56, .32);
+
+  background:
+    rgba(240, 68, 56, .13);
+}}
+
+}}
+
+[data-theme="dark"] .pe-error-code-badge {{
+  color: #fda29b;
+
+  background:
+    rgba(240, 68, 56, .14);
+}}
+
+[data-theme="dark"]
+.pe-transaction-errors.pe-has-errors {{
+  border-color:
+    rgba(240, 68, 56, .35) !important;
+
+  background:
+    linear-gradient(
+      180deg,
+      rgba(240, 68, 56, .075),
+      transparent 50%
+    ),
+    var(--pe-card) !important;
+}}
+
+[data-theme="dark"] .pe-error-alert {{
+  border-color:
+    rgba(240, 68, 56, .38);
+
+  background:
+    linear-gradient(
+      90deg,
+      rgba(240, 68, 56, .14),
+      rgba(240, 68, 56, .06)
+    );
+}}
+
+[data-theme="dark"]
+.pe-error-alert-description {{
+  color: var(--pe-muted);
+}}
+
+
+/* Responsive */
+
+@media (max-width: 760px) {{
+  .pe-error-alert {{
+    align-items: flex-start;
+  }}
+
+  .pe-response-codes {{
+    min-width: 180px;
+  }}
+}}
+
 </style>
 
 <script>
@@ -1612,9 +3430,209 @@ def build_html(
 }})();
 </script>
 
+
+<style id="pe-v42-color-adjustments">
+
+.pe-transaction-failed td {{
+  background:
+    rgba(
+      240,
+      68,
+      56,
+      .055
+    );
+}}
+
+.pe-transaction-failed td:first-child {{
+  box-shadow:
+    inset 4px 0 0
+    #ef233c;
+}}
+
+.pe-transaction-success td:first-child {{
+  box-shadow:
+    inset 4px 0 0
+    #00b86b;
+}}
+
+.pe-http-code-success {{
+  color: #067647 !important;
+
+  border:
+    1px solid
+    #75e0a7 !important;
+
+  background:
+    #dcfae6 !important;
+}}
+
+.pe-http-code-server {{
+  color: #b42318 !important;
+
+  border:
+    1px solid
+    #f97066 !important;
+
+  background:
+    #fee4e2 !important;
+}}
+
+.pe-error-code-badge {{
+  color: #ffffff !important;
+
+  background:
+    #ef233c !important;
+
+  border:
+    1px solid
+    #d90429 !important;
+}}
+
+.pe-transaction-errors.pe-has-errors {{
+  border:
+    1px solid
+    #f97066 !important;
+
+  box-shadow:
+    inset 4px 0 0
+    #ef233c,
+    var(--pe-shadow) !important;
+}}
+
+.pe-error-alert {{
+  border:
+    1px solid
+    #f97066 !important;
+
+  background:
+    linear-gradient(
+      90deg,
+      #fee4e2,
+      #fff4f2
+    ) !important;
+}}
+
+.pe-error-alert-icon {{
+  background:
+    #ef233c !important;
+}}
+
+.pe-error-alert-title {{
+  color:
+    #b42318 !important;
+}}
+
+[data-theme="dark"]
+.pe-transaction-failed td {{
+  background:
+    rgba(
+      239,
+      35,
+      60,
+      .10
+    );
+}}
+
+[data-theme="dark"]
+.pe-http-code-success {{
+  color:
+    #75e0a7 !important;
+
+  border-color:
+    #079455 !important;
+
+  background:
+    rgba(
+      0,
+      184,
+      107,
+      .16
+    ) !important;
+}}
+
+[data-theme="dark"]
+.pe-http-code-server {{
+  color:
+    #fda29b !important;
+
+  border-color:
+    #ef233c !important;
+
+  background:
+    rgba(
+      239,
+      35,
+      60,
+      .17
+    ) !important;
+}}
+
+[data-theme="dark"]
+.pe-error-alert {{
+  background:
+    rgba(
+      239,
+      35,
+      60,
+      .12
+    ) !important;
+}}
+
+</style>
+
 </head>
 
+
 <body>
+
+<div class="pe-topbar">
+  <div class="pe-brand">
+    <div class="pe-brand-icon" aria-hidden="true">
+      <svg viewBox="0 0 48 48">
+        <polyline
+          points="2,25 8,25 12,12 17,38 22,7 27,33 31,18 35,25 46,25"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="3.3"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+      </svg>
+    </div>
+
+    <div class="pe-brand-copy">
+      <div class="pe-brand-title">
+        PERFORMANCE ENGINEERING
+      </div>
+      <div class="pe-brand-subtitle">
+        Reporte automatizado de pruebas de performance
+      </div>
+    </div>
+  </div>
+
+  <div class="pe-topbar-actions">
+    <div class="pe-theme-segment">
+      <button
+        type="button"
+        class="pe-theme-option"
+        data-theme-choice="light"
+      >
+        ☀
+        <span>Claro</span>
+      </button>
+
+      <button
+        type="button"
+        class="pe-theme-option"
+        data-theme-choice="dark"
+      >
+        ◐
+        <span>Oscuro</span>
+      </button>
+    </div>
+  </div>
+</div>
+
 
   <div class="report-toolbar">
     <button
@@ -1641,14 +3659,14 @@ def build_html(
   <header class="header">
     <div>
       <div class="eyebrow">
-        AI-Assisted Performance Engineering
+        REPORTE DE PRUEBA DE PERFORMANCE
       </div>
 
-      <h1>Performance Test Report</h1>
+      <h1>Resultados de la prueba de performance</h1>
 
       <div class="subtitle">
-        Resultado ejecutivo y técnico generado automáticamente
-        a partir de JMeter, SLA configurables y análisis Python.
+        Resultados de la prueba de performance generados a partir de
+        métricas de ejecución, criterios SLA y análisis automatizado.
       </div>
     </div>
 
@@ -1664,7 +3682,7 @@ def build_html(
     </div>
 
     <div class="metadata-item">
-      <div class="metadata-label">Target</div>
+      <div class="metadata-label">Objetivo</div>
       <div class="metadata-value">{target}</div>
     </div>
 
@@ -1681,12 +3699,12 @@ def build_html(
 
   <section class="cards">
     <div class="card">
-      <div class="card-label">Requests</div>
+      <div class="card-label">Solicitudes</div>
       <div class="card-value">{requests}</div>
     </div>
 
     <div class="card">
-      <div class="card-label">Success Rate</div>
+      <div class="card-label">Tasa de éxito</div>
       <div class="card-value">{success_rate}%</div>
     </div>
 
@@ -1706,19 +3724,19 @@ def build_html(
     </div>
   </section>
 
-  <section class="panel">
-    <h2>Response Time Summary</h2>
+  <section class="panel pe-response-summary">
+    <h2>Resumen de tiempos de respuesta</h2>
 
     <table>
       <thead>
         <tr>
-          <th>Min</th>
-          <th>Average</th>
+          <th>Mínimo</th>
+          <th>Promedio</th>
           <th>p50</th>
           <th>p90</th>
           <th>p95</th>
           <th>p99</th>
-          <th>Max</th>
+          <th>Máximo</th>
         </tr>
       </thead>
 
@@ -1736,30 +3754,30 @@ def build_html(
     </table>
   </section>
 
-  <section class="panel">
-    <h2>Transaction / Service Breakdown</h2>
+  <section class="panel pe-transactions">
+    <h2>Desglose por transacción / servicio</h2>
 
     <p class="muted">
-      Metrics grouped dynamically by JMeter label.
-      Labels may represent endpoints, services,
-      business transactions or imported test steps.
+      Métricas agrupadas por transacción o servicio.
+      Las etiquetas pueden representar endpoints, servicios,
+      transacciones de negocio o pasos importados.
     </p>
 
     <div class="table-scroll">
       <table>
         <thead>
           <tr>
-            <th>Transaction / Service</th>
-            <th>Samples</th>
-            <th>Success %</th>
+            <th>Transacción / servicio</th>
+            <th>Muestras</th>
+            <th>Éxito %</th>
             <th>Error %</th>
-            <th>Avg ms</th>
+            <th>Promedio ms</th>
             <th>p90 ms</th>
             <th>p95 ms</th>
             <th>p99 ms</th>
             <th>Req/s</th>
-            <th>Response Codes</th>
-            <th>Status</th>
+            <th>Códigos de respuesta</th>
+
           </tr>
         </thead>
 
@@ -1770,18 +3788,18 @@ def build_html(
     </div>
   </section>
 
-  <section class="panel">
-    <h2>Errors by Transaction / Service</h2>
+  <section class="panel pe-transaction-errors">
+    <h2>Errores por transacción / servicio</h2>
 
     <div class="table-scroll">
       <table>
         <thead>
           <tr>
-            <th>Transaction / Service</th>
-            <th>Errors</th>
+            <th>Transacción / servicio</th>
+            <th>Errores</th>
             <th>Error %</th>
-            <th>Response Codes</th>
-            <th>Failure Details</th>
+            <th>Códigos de respuesta</th>
+            <th>Detalle del error</th>
           </tr>
         </thead>
 
@@ -1796,7 +3814,7 @@ def build_html(
     <div class="service-dashboard-toolbar">
       <div class="service-selector-group">
         <label for="service-selector">
-          Transaction / Service
+          Transacción / servicio
         </label>
 
         <select
@@ -1809,14 +3827,14 @@ def build_html(
         id="service-context"
         class="service-context"
       >
-        All Transactions
+        Todas las transacciones
       </div>
     </div>
 
     <div class="service-kpis">
       <div class="service-kpi">
         <div class="service-kpi-label">
-          Samples
+          Muestras
         </div>
         <div
           id="service-kpi-samples"
@@ -1828,7 +3846,7 @@ def build_html(
 
       <div class="service-kpi">
         <div class="service-kpi-label">
-          Success
+          Éxito
         </div>
         <div
           id="service-kpi-success"
@@ -1840,7 +3858,7 @@ def build_html(
 
       <div class="service-kpi">
         <div class="service-kpi-label">
-          Error Rate
+          Tasa de error
         </div>
         <div
           id="service-kpi-errors"
@@ -1852,7 +3870,7 @@ def build_html(
 
       <div class="service-kpi">
         <div class="service-kpi-label">
-          Average
+          Promedio
         </div>
         <div
           id="service-kpi-avg"
@@ -1901,7 +3919,7 @@ def build_html(
 
     <div class="interactive-chart-grid">
       <div class="service-chart-panel">
-        <h3>Response Time Trend</h3>
+        <h3>Tendencia de tiempo de respuesta</h3>
         <div
           id="service-response-chart"
           class="service-chart"
@@ -1909,7 +3927,7 @@ def build_html(
       </div>
 
       <div class="service-chart-panel">
-        <h3>Throughput Trend</h3>
+        <h3>Tendencia de throughput</h3>
         <div
           id="service-throughput-chart"
           class="service-chart"
@@ -1917,7 +3935,7 @@ def build_html(
       </div>
 
       <div class="service-chart-panel">
-        <h3>Error Rate Trend</h3>
+        <h3>Tendencia de tasa de error</h3>
         <div
           id="service-error-chart"
           class="service-chart"
@@ -1931,33 +3949,16 @@ def build_html(
     type="application/json"
   >{service_dashboard_json}</script>
 
-  <section class="chart-grid legacy-global-charts">
-    <div class="panel chart-panel">
-      <h2>Response Time Trend</h2>
-      {response_time_chart}
-    </div>
-
-    <div class="panel chart-panel">
-      <h2>Throughput Trend</h2>
-      {throughput_chart}
-    </div>
-  </section>
-
-  <section class="panel">
-    <h2>Error Rate Trend</h2>
-    {error_chart}
-  </section>
-
-  <section class="panel">
-    <h2>SLA Validation</h2>
+  <section class="panel pe-sla">
+    <h2>Validación de SLA</h2>
 
     <table>
       <thead>
         <tr>
-          <th>Check</th>
-          <th>Threshold</th>
-          <th>Actual</th>
-          <th>Result</th>
+          <th>Validación</th>
+          <th>Umbral</th>
+          <th>Valor observado</th>
+          <th>Resultado</th>
         </tr>
       </thead>
 
@@ -1967,14 +3968,14 @@ def build_html(
     </table>
   </section>
 
-  <section class="panel">
-    <h2>Errors by Response Code</h2>
+  <section class="panel pe-response-errors">
+    <h2>Errores por código de respuesta</h2>
 
     <table>
       <thead>
         <tr>
-          <th>Response Code</th>
-          <th>Count</th>
+          <th>Código de respuesta</th>
+          <th>Cantidad</th>
         </tr>
       </thead>
 
@@ -1984,15 +3985,15 @@ def build_html(
     </table>
   </section>
 
-  <section class="panel">
-    <h2>Recommendations</h2>
+  <section class="panel pe-recommendations">
+    <h2>Recomendaciones</h2>
     <ul>
       {recommendations}
     </ul>
   </section>
 
   <footer class="footer">
-    Generated by the Performance Engineering Demo Pipeline
+    Performance Engineering
   </footer>
 
 </div>
@@ -2036,7 +4037,7 @@ def build_html(
 
     if (theme === "dark") {{
       icon.textContent = "☀";
-      label.textContent = "Light";
+      label.textContent = "Claro";
 
       button.setAttribute(
         "aria-label",
@@ -2044,7 +4045,7 @@ def build_html(
       );
     }} else {{
       icon.textContent = "☾";
-      label.textContent = "Dark";
+      label.textContent = "Oscuro";
 
       button.setAttribute(
         "aria-label",
@@ -2192,7 +4193,7 @@ def build_html(
     setText(
       "service-context",
       item.label
-      || "All Transactions"
+      || "Todas las transacciones"
     );
 
     setText(
@@ -2310,7 +4311,7 @@ def build_html(
     if (!numeric.length) {{
       container.innerHTML =
         '<div class="chart-empty">'
-        + 'No data available'
+        + 'Sin datos disponibles'
         + '</div>';
 
       return;
@@ -2531,7 +4532,7 @@ def build_html(
       "service-response-chart",
       series,
       "avg_response_ms",
-      "Average response time (ms)",
+      "Tiempo promedio de respuesta (ms)",
       "--report-response"
     );
 
@@ -2547,7 +4548,7 @@ def build_html(
       "service-error-chart",
       series,
       "error_rate_pct",
-      "Error rate (%)",
+      "Tasa de error (%)",
       "--report-error"
     );
   }}
@@ -2574,8 +4575,8 @@ def build_html(
         item.label
         || (
           index === 0
-            ? "All Transactions"
-            : "Unnamed Transaction"
+            ? "Todas las transacciones"
+            : "Transacción sin nombre"
         );
 
       selector.appendChild(
@@ -2609,6 +4610,552 @@ def build_html(
 }})();
 </script>
 
+
+<script id="pe-modern-theme-controller">
+(function () {{
+  const STORAGE_KEY =
+    "performance-report-theme";
+
+  const root =
+    document.documentElement;
+
+  const buttons = Array.from(
+    document.querySelectorAll(
+      "[data-theme-choice]"
+    )
+  );
+
+  function resolvedTheme() {{
+    const explicit =
+      root.getAttribute("data-theme");
+
+    if (
+      explicit === "light"
+      || explicit === "dark"
+    ) {{
+      return explicit;
+    }}
+
+    try {{
+      const saved =
+        localStorage.getItem(
+          STORAGE_KEY
+        );
+
+      if (
+        saved === "light"
+        || saved === "dark"
+      ) {{
+        return saved;
+      }}
+    }} catch (_) {{
+      // Local storage may be restricted.
+    }}
+
+    return (
+      window.matchMedia
+      && window.matchMedia(
+        "(prefers-color-scheme: dark)"
+      ).matches
+    )
+      ? "dark"
+      : "light";
+  }}
+
+  function render(theme) {{
+    root.setAttribute(
+      "data-theme",
+      theme
+    );
+
+    buttons.forEach(
+      function (button) {{
+        button.classList.toggle(
+          "is-active",
+          button.dataset.themeChoice
+            === theme
+        );
+      }}
+    );
+  }}
+
+  function setTheme(theme) {{
+    render(theme);
+
+    try {{
+      localStorage.setItem(
+        STORAGE_KEY,
+        theme
+      );
+    }} catch (_) {{
+      // Local storage may be restricted.
+    }}
+
+    window.dispatchEvent(
+      new Event("resize")
+    );
+  }}
+
+  buttons.forEach(
+    function (button) {{
+      button.addEventListener(
+        "click",
+        function () {{
+          setTheme(
+            button.dataset.themeChoice
+          );
+        }}
+      );
+    }}
+  );
+
+  render(resolvedTheme());
+}})();
+</script>
+
+
+<script id="pe-v4-layout">
+(function () {{
+  function byClass(name) {{
+    return document.querySelector(
+      "." + name
+    );
+  }}
+
+  const responseSummary =
+    byClass("pe-response-summary");
+
+  const transactions =
+    byClass("pe-transactions");
+
+  const transactionErrors =
+    byClass("pe-transaction-errors");
+
+  const sla =
+    byClass("pe-sla");
+
+  const responseErrors =
+    byClass("pe-response-errors");
+
+  const serviceDashboard =
+    document.querySelector(
+      ".service-dashboard"
+    );
+
+  if (
+    !responseSummary
+    || !transactions
+    || !sla
+    || !responseErrors
+  ) {{
+    return;
+  }}
+
+  const existing =
+    document.querySelector(
+      ".pe-analysis-grid"
+    );
+
+  if (existing) {{
+    return;
+  }}
+
+  const grid =
+    document.createElement(
+      "div"
+    );
+
+  grid.className =
+    "pe-analysis-grid";
+
+  const left =
+    document.createElement(
+      "div"
+    );
+
+  left.className =
+    "pe-analysis-left";
+
+  const right =
+    document.createElement(
+      "div"
+    );
+
+  right.className =
+    "pe-analysis-right";
+
+  left.appendChild(
+    responseSummary
+  );
+
+  left.appendChild(
+    transactions
+  );
+
+  if (transactionErrors) {{
+    left.appendChild(
+      transactionErrors
+    );
+  }}
+
+  right.appendChild(
+    sla
+  );
+
+  right.appendChild(
+    responseErrors
+  );
+
+  grid.appendChild(left);
+  grid.appendChild(right);
+
+  if (serviceDashboard) {{
+    serviceDashboard
+      .parentNode
+      .insertBefore(
+        grid,
+        serviceDashboard
+      );
+  }} else {{
+    document
+      .querySelector(".container")
+      .appendChild(grid);
+  }}
+}})();
+</script>
+
+
+
+
+
+<script id="pe-error-visualization-v42">
+(function () {{
+  function parseNumber(value) {{
+    const result = Number(
+      String(value || "")
+        .replace("%", "")
+        .trim()
+    );
+
+    return Number.isFinite(result)
+      ? result
+      : 0;
+  }}
+
+  function percent(value) {{
+    return Number(value || 0)
+      .toFixed(2)
+      + "%";
+  }}
+
+  function codeType(code) {{
+    const value =
+      String(code || "");
+
+    if (value.startsWith("2")) {{
+      return "success";
+    }}
+
+    if (value.startsWith("3")) {{
+      return "redirect";
+    }}
+
+    if (value.startsWith("4")) {{
+      return "client";
+    }}
+
+    if (value.startsWith("5")) {{
+      return "server";
+    }}
+
+    return "redirect";
+  }}
+
+  function parseCodes(
+    value,
+    total
+  ) {{
+    return String(value || "")
+      .split(",")
+      .map(function (part) {{
+        const trimmed =
+          part.trim();
+
+        const match =
+          trimmed.match(
+            /^(.+?)[×x]([0-9]+)$/
+          );
+
+        if (!match) {{
+          return null;
+        }}
+
+        const code =
+          match[1].trim();
+
+        const count =
+          Number(match[2]);
+
+        const rate =
+          total > 0
+            ? (
+                count
+                / total
+                * 100
+              )
+            : 0;
+
+        return {{
+          code: code,
+          count: count,
+          rate: rate,
+          type: codeType(code),
+        }};
+      }})
+      .filter(Boolean);
+  }}
+
+  function createCodeBadge(item) {{
+    const badge =
+      document.createElement(
+        "div"
+      );
+
+    badge.className =
+      "pe-http-code "
+      + "pe-http-code-"
+      + item.type;
+
+    const code =
+      document.createElement(
+        "div"
+      );
+
+    code.className =
+      "pe-http-code-name";
+
+    code.textContent =
+      item.code;
+
+    const count =
+      document.createElement(
+        "div"
+      );
+
+    count.className =
+      "pe-http-code-count";
+
+    count.textContent =
+      item.count;
+
+    const rate =
+      document.createElement(
+        "div"
+      );
+
+    rate.className =
+      "pe-http-code-rate";
+
+    rate.textContent =
+      percent(item.rate);
+
+    badge.appendChild(code);
+    badge.appendChild(count);
+    badge.appendChild(rate);
+
+    return badge;
+  }}
+
+  function enhanceTransactions() {{
+    const panel =
+      document.querySelector(
+        ".pe-transactions"
+      );
+
+    if (!panel) {{
+      return;
+    }}
+
+    panel
+      .querySelectorAll("tbody tr")
+      .forEach(function (row) {{
+        const cells =
+          row.querySelectorAll("td");
+
+        if (cells.length !== 10) {{
+          return;
+        }}
+
+        const samples =
+          parseNumber(
+            cells[1].textContent
+          );
+
+        const errorRate =
+          parseNumber(
+            cells[3].textContent
+          );
+
+        const codesCell =
+          cells[9];
+
+        const parsed =
+          parseCodes(
+            codesCell.textContent,
+            samples
+          );
+
+        if (parsed.length) {{
+          codesCell.innerHTML = "";
+
+          const wrapper =
+            document.createElement(
+              "div"
+            );
+
+          wrapper.className =
+            "pe-response-codes";
+
+          parsed.forEach(
+            function (item) {{
+              wrapper.appendChild(
+                createCodeBadge(
+                  item
+                )
+              );
+            }}
+          );
+
+          codesCell.appendChild(
+            wrapper
+          );
+        }}
+
+        if (errorRate > 0) {{
+          row.classList.add(
+            "pe-transaction-failed"
+          );
+        }} else {{
+          row.classList.add(
+            "pe-transaction-success"
+          );
+        }}
+      }});
+  }}
+
+  function enhanceErrors() {{
+    const panel =
+      document.querySelector(
+        ".pe-transaction-errors"
+      );
+
+    if (!panel) {{
+      return;
+    }}
+
+    let totalErrors = 0;
+
+    panel
+      .querySelectorAll("tbody tr")
+      .forEach(function (row) {{
+        const cells =
+          row.querySelectorAll("td");
+
+        if (cells.length < 4) {{
+          return;
+        }}
+
+        totalErrors +=
+          parseNumber(
+            cells[1].textContent
+          );
+
+        const cell =
+          cells[3];
+
+        const match =
+          String(
+            cell.textContent || ""
+          )
+          .trim()
+          .match(
+            /^(.+?)[×x]([0-9]+)$/
+          );
+
+        if (match) {{
+          cell.innerHTML =
+            '<span '
+            + 'class="pe-error-code-badge">'
+            + match[1].trim()
+            + '</span>';
+        }}
+      }});
+
+    if (totalErrors <= 0) {{
+      return;
+    }}
+
+    panel.classList.add(
+      "pe-has-errors"
+    );
+
+    const requestsElement =
+      document.querySelector(
+        ".cards "
+        + ".card:nth-child(1) "
+        + ".card-value"
+      );
+
+    const totalRequests =
+      requestsElement
+        ? parseNumber(
+            requestsElement.textContent
+          )
+        : 0;
+
+    const errorRate =
+      totalRequests > 0
+        ? (
+            totalErrors
+            / totalRequests
+            * 100
+          )
+        : 0;
+
+    const alert =
+      document.createElement(
+        "div"
+      );
+
+    alert.className =
+      "pe-error-alert";
+
+    alert.innerHTML =
+      '<div class="pe-error-alert-content">'
+      + '<div class="pe-error-alert-icon">!</div>'
+      + '<div>'
+      + '<div class="pe-error-alert-title">'
+      + 'Se detectaron errores en la ejecución'
+      + '</div>'
+      + '<div class="pe-error-alert-description">'
+      + totalErrors
+      + ' de '
+      + totalRequests
+      + ' solicitudes fallaron ('
+      + percent(errorRate)
+      + ').'
+      + '</div>'
+      + '</div>'
+      + '</div>';
+
+    panel.appendChild(alert);
+  }}
+
+  enhanceTransactions();
+  enhanceErrors();
+}})();
+</script>
+
 </body>
 </html>
 """.format(
@@ -2619,15 +5166,42 @@ def build_html(
         generated_at=generated_at,
         source=html.escape(str(analysis.get("source", ""))),
         requests=metrics["total_requests"],
-        success_rate=metrics["success_rate_pct"],
-        throughput=metrics["throughput_req_per_sec"],
-        p95=metrics["response_time_ms"]["p95"],
-        p99=metrics["response_time_ms"]["p99"],
-        minimum=metrics["response_time_ms"]["min"],
-        average=metrics["response_time_ms"]["avg"],
-        p50=metrics["response_time_ms"]["p50"],
-        p90=metrics["response_time_ms"]["p90"],
-        maximum=metrics["response_time_ms"]["max"],
+        success_rate=format_metric(
+            metrics["success_rate_pct"],
+            decimals=3,
+        ),
+        throughput=format_metric(
+            metrics["throughput_req_per_sec"],
+            decimals=3,
+        ),
+        p95=format_metric(
+            metrics["response_time_ms"]["p95"],
+            decimals=1,
+        ),
+        p99=format_metric(
+            metrics["response_time_ms"]["p99"],
+            decimals=1,
+        ),
+        minimum=format_metric(
+            metrics["response_time_ms"]["min"],
+            decimals=2,
+        ),
+        average=format_metric(
+            metrics["response_time_ms"]["avg"],
+            decimals=2,
+        ),
+        p50=format_metric(
+            metrics["response_time_ms"]["p50"],
+            decimals=1,
+        ),
+        p90=format_metric(
+            metrics["response_time_ms"]["p90"],
+            decimals=1,
+        ),
+        maximum=format_metric(
+            metrics["response_time_ms"]["max"],
+            decimals=2,
+        ),
         response_time_chart=response_time_chart,
         throughput_chart=throughput_chart,
         error_chart=error_chart,

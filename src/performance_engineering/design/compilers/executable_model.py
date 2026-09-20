@@ -35,7 +35,7 @@ SUPPORTED_EXTRACTOR_TYPES = {
     "JSON_PATH",
 }
 
-DEFAULT_EXPECTED_STATUS = 200
+DEFAULT_EXPECTED_STATUS = None
 
 RUNTIME_REFERENCE_RE = re.compile(
     r"\$\{([A-Za-z_][A-Za-z0-9_.-]*)\}"
@@ -508,9 +508,10 @@ def normalize_expected_status(
     """Normalize accepted HTTP status codes."""
 
     if value is None:
-        raw_values = [
-            DEFAULT_EXPECTED_STATUS
-        ]
+        raise NormalizedCompilationError(
+            f"{context}.expected_status is not declared. "
+            "An explicit response contract is required."
+        )
     elif isinstance(
         value,
         list,
