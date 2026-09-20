@@ -428,6 +428,14 @@ def main() -> int:
 
     scenario = args.scenario
 
+    requested_scenario = (
+        os.getenv(
+            "PERF_REQUESTED_SCENARIO",
+            ""
+        ).strip()
+        or scenario
+    )
+
     plan = (
         ROOT
         / "tests"
@@ -439,7 +447,7 @@ def main() -> int:
     workspace = (
         ROOT
         / "workspaces"
-        / scenario
+        / requested_scenario
     )
 
     profile = (
@@ -613,30 +621,42 @@ def main() -> int:
             "que aún sean necesarias..."
         )
 
-        if not model.is_file():
-            raise NaturalExecutionError(
-                "No existe el modelo normalizado "
-                f"requerido: {model}"
+        if artifact.is_file():
+            print()
+            print(
+                "[OK] Artefacto del motor ya disponible: "
+                f"{artifact}"
+            )
+            print(
+                "[OK] Se reutilizará sin regenerarlo."
             )
 
-        run_workflow(
-            "prepare",
-            "--model",
-            str(model),
-            "--profile",
-            str(profile),
-        )
+        else:
+            if not model.is_file():
+                raise NaturalExecutionError(
+                    "No existe el modelo normalizado "
+                    "requerido para preparar un nuevo "
+                    f"artefacto: {model}"
+                )
 
-        artifact = artifact_for(
-            scenario,
-            engine,
-        )
-
-        if not artifact.is_file():
-            raise NaturalExecutionError(
-                "No se generó el artefacto esperado "
-                f"para {engine}: {artifact}"
+            run_workflow(
+                "prepare",
+                "--model",
+                str(model),
+                "--profile",
+                str(profile),
             )
+
+            artifact = artifact_for(
+                scenario,
+                engine,
+            )
+
+            if not artifact.is_file():
+                raise NaturalExecutionError(
+                    "No se generó el artefacto esperado "
+                    f"para {engine}: {artifact}"
+                )
 
         _, _, authorization = (
             plan_status(

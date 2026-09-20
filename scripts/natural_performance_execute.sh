@@ -120,13 +120,62 @@ sleep 1
 
 exec_status=0
 
+RESOLVED_ARGS=("$@")
+
+for ((i=0; i<${#RESOLVED_ARGS[@]}; i++)); do
+  if [ "${RESOLVED_ARGS[$i]}" = "--scenario" ]; then
+
+    if [ $((i + 1)) -ge "${#RESOLVED_ARGS[@]}" ]; then
+      echo "ERROR: --scenario requires a value." >&2
+      exit 2
+    fi
+
+    REQUESTED_SCENARIO="${RESOLVED_ARGS[$((i + 1))]}"
+
+    CANONICAL_SCENARIO="$(
+      "${PYTHON}"         scripts/resolve_execution_scenario.py         --scenario "${REQUESTED_SCENARIO}"
+    )"
+
+    if [ "${CANONICAL_SCENARIO}" != "${REQUESTED_SCENARIO}" ]; then
+      echo
+      echo "[OK] Execution scenario resolved:"
+      echo "     Request   : ${REQUESTED_SCENARIO}"
+      echo "     Canonical : ${CANONICAL_SCENARIO}"
+      echo
+    fi
+
+    RESOLVED_ARGS[$((i + 1))]="${CANONICAL_SCENARIO}"
+
+    break
+  fi
+done
+
+PERF_REQUESTED_SCENARIO="${REQUESTED_SCENARIO:-}" \
 "${PYTHON}" \
   scripts/natural_performance_execute.py \
-  "$@" \
+  "${RESOLVED_ARGS[@]}" \
   || exec_status="$?"
 
 if [ "${exec_status}" -eq 0 ]; then
-  "${PYTHON}"     scripts/finalize_execution_state.py     -- "$@"     || echo "[WARN] Execution completed but state pointer synchronization failed."
+  CHECK_ONLY_REQUESTED="false"
+
+  for ARG in "$@"; do
+    if [ "${ARG}" = "--check-only" ]; then
+      CHECK_ONLY_REQUESTED="true"
+      break
+    fi
+  done
+
+  if [ "${CHECK_ONLY_REQUESTED}" = "true" ]; then
+    echo
+    echo "[CHECK ONLY] Finalizer omitido: no existe ejecución real que registrar."
+  else
+    "${PYTHON}" \
+      scripts/finalize_execution_state.py \
+      -- \
+      "${RESOLVED_ARGS[@]}" \
+      || echo "[WARN] Execution completed but state pointer synchronization failed."
+  fi
 fi
 
 exit "${exec_status}"
