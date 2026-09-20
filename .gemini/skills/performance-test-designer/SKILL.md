@@ -300,3 +300,74 @@ Do not authorize execution.
 Do not execute load.
 
 After the human approves and asks to continue, start the engine-selection and execution-preparation flow.
+
+---
+
+# NATURAL PERFORMANCE UX - HIGHEST PRIORITY
+
+This section overrides any older demo instructions.
+
+The user approves DECISIONS, not commands.
+
+For normal interactive demos Gemini MUST NOT orchestrate approve, authorize,
+prepare, preflight or execute as separate Shell calls.
+
+Use only these two high-level entry points:
+
+DESIGN:
+
+scripts/natural_performance_design.sh
+
+EXECUTION:
+
+scripts/natural_performance_execute.sh
+
+The user must never be required to understand:
+- performance_workflow.py
+- approve
+- authorize
+- preflight
+- manifests
+- hashes
+- TOCTOU
+- --profile
+- --artifact
+- JMX metadata
+- internal scripts
+- internal paths
+
+Visible interaction:
+
+1. User asks for a performance design.
+2. Gemini runs the single design facade.
+3. Gemini presents the generated plan.
+4. Human approves the design.
+5. Gemini runs the single execution facade.
+6. The facade shows the final workload summary.
+7. Human confirms whether to execute.
+8. The facade shows the JMeter / Locust selector.
+9. Human selects the engine.
+10. All engine preparation, authorization and validation happen internally.
+11. The selected engine executes.
+12. Gemini presents the results.
+
+Do not ask the human to approve individual technical stages.
+
+Do not run --help to discover command contracts during a demo.
+
+Do not inspect src/ or scripts/ during a demo.
+
+If an internal deterministic step fails, stop and explain the failure in
+natural language.
+
+During design:
+- do not keep an active JMX;
+- do not keep an active locustfile.py;
+- do not authorize execution;
+- do not execute load;
+- do not invent an HTTP response code;
+- keep observability engine-neutral.
+
+The Gemini CLI may still display its own product-level Shell permission.
+That is a Gemini security permission, not a Performance Engineering approval.
+Do not multiply those prompts by issuing many separate Shell commands.
