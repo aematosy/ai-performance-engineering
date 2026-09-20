@@ -10,7 +10,7 @@ PROFILE ?= config/execution-profiles/baseline.yaml
 APPROVED_BY ?=
 AUTHORIZED_BY ?=
 
-LATEST_REPORT_DIR := $(shell find reports -mindepth 1 -maxdepth 1 -type d -print0 2>/dev/null | xargs -0 ls -td 2>/dev/null | head -1)
+CURRENT_REPORT_DIR := $(shell poetry run python scripts/current_execution_report.py read 2>/dev/null)
 
 .PHONY: help validate smoke review-plan validate-plan approve-plan generate-jmx validate-jmx \
 	authorize-demo preflight-demo run-demo status observability-up observability-down \
@@ -149,52 +149,52 @@ clean-runtime:
 	@echo "Runtime caches and temporary files removed."
 
 reporte_ia:
-	@if [ -z "$(LATEST_REPORT_DIR)" ]; then \
-		echo "ERROR: No se encontraron reportes en reports/"; \
+	@if [ -z "$(CURRENT_REPORT_DIR)" ]; then \
+		echo "ERROR: No existe un reporte asociado a la última ejecución completada"; \
 		exit 1; \
 	fi
-	@if [ ! -f "$(LATEST_REPORT_DIR)/executive-report.html" ]; then \
-		echo "ERROR: No existe $(LATEST_REPORT_DIR)/executive-report.html"; \
+	@if [ ! -f "$(CURRENT_REPORT_DIR)/executive-report.html" ]; then \
+		echo "ERROR: No existe $(CURRENT_REPORT_DIR)/executive-report.html"; \
 		exit 1; \
 	fi
-	@echo "Abriendo reporte HTML: $(LATEST_REPORT_DIR)/executive-report.html"
-	@open -a "Google Chrome" "$(LATEST_REPORT_DIR)/executive-report.html"
+	@echo "Abriendo reporte HTML: $(CURRENT_REPORT_DIR)/executive-report.html"
+	@open -a "Google Chrome" "$(CURRENT_REPORT_DIR)/executive-report.html"
 
 reporte_pdf:
-	@if [ -z "$(LATEST_REPORT_DIR)" ]; then \
-		echo "ERROR: No se encontraron reportes en reports/"; \
+	@if [ -z "$(CURRENT_REPORT_DIR)" ]; then \
+		echo "ERROR: No existe un reporte asociado a la última ejecución completada"; \
 		exit 1; \
 	fi
-	@if [ ! -f "$(LATEST_REPORT_DIR)/executive-report.pdf" ]; then \
-		echo "ERROR: No existe $(LATEST_REPORT_DIR)/executive-report.pdf"; \
+	@if [ ! -f "$(CURRENT_REPORT_DIR)/executive-report.pdf" ]; then \
+		echo "ERROR: No existe $(CURRENT_REPORT_DIR)/executive-report.pdf"; \
 		exit 1; \
 	fi
-	@echo "Abriendo PDF: $(LATEST_REPORT_DIR)/executive-report.pdf"
-	@open "$(LATEST_REPORT_DIR)/executive-report.pdf"
+	@echo "Abriendo PDF: $(CURRENT_REPORT_DIR)/executive-report.pdf"
+	@open "$(CURRENT_REPORT_DIR)/executive-report.pdf"
 
 reporte_jmeter:
-	@if [ -z "$(LATEST_REPORT_DIR)" ]; then \
-		echo "ERROR: No se encontraron reportes en reports/"; \
+	@if [ -z "$(CURRENT_REPORT_DIR)" ]; then \
+		echo "ERROR: No existe un reporte asociado a la última ejecución completada"; \
 		exit 1; \
 	fi
-	@if [ ! -f "$(LATEST_REPORT_DIR)/jmeter/index.html" ]; then \
-		echo "ERROR: No existe $(LATEST_REPORT_DIR)/jmeter/index.html"; \
+	@if [ ! -f "$(CURRENT_REPORT_DIR)/jmeter/index.html" ]; then \
+		echo "ERROR: No existe $(CURRENT_REPORT_DIR)/jmeter/index.html"; \
 		exit 1; \
 	fi
-	@echo "Abriendo reporte JMeter: $(LATEST_REPORT_DIR)/jmeter/index.html"
-	@open -a "Google Chrome" "$(LATEST_REPORT_DIR)/jmeter/index.html"
+	@echo "Abriendo reporte JMeter: $(CURRENT_REPORT_DIR)/jmeter/index.html"
+	@open -a "Google Chrome" "$(CURRENT_REPORT_DIR)/jmeter/index.html"
 
 reporte_intelligence:
-	@if [ -z "$(LATEST_REPORT_DIR)" ]; then \
-		echo "ERROR: No se encontraron reportes en reports/"; \
+	@if [ -z "$(CURRENT_REPORT_DIR)" ]; then \
+		echo "ERROR: No existe un reporte asociado a la última ejecución completada"; \
 		exit 1; \
 	fi
-	@if [ ! -f "$(LATEST_REPORT_DIR)/intelligence-report.md" ]; then \
-		echo "ERROR: No existe $(LATEST_REPORT_DIR)/intelligence-report.md"; \
+	@if [ ! -f "$(CURRENT_REPORT_DIR)/intelligence-report.md" ]; then \
+		echo "ERROR: No existe $(CURRENT_REPORT_DIR)/intelligence-report.md"; \
 		exit 1; \
 	fi
-	@echo "Abriendo reporte Intelligence: $(LATEST_REPORT_DIR)/intelligence-report.md"
-	@open "$(LATEST_REPORT_DIR)/intelligence-report.md"
+	@echo "Abriendo reporte Intelligence: $(CURRENT_REPORT_DIR)/intelligence-report.md"
+	@open "$(CURRENT_REPORT_DIR)/intelligence-report.md"
 
 reporte_grafana:
 	@echo "Abriendo dashboard de performance en Grafana..."

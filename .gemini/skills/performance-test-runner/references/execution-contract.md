@@ -1,29 +1,49 @@
 # Natural Execution Contract
 
-Public entrypoint:
+## ONE PUBLIC ENTRYPOINT
 
-`scripts/natural_performance_execute.sh`
+Normal execution uses only:
 
-Internal approval, authorization, preparation, validation and engine dispatch
-are implementation details.
+scripts/natural_performance_execute.sh --scenario "<scenario>"
 
-Gemini must not orchestrate them manually.
+## HUMAN GATES
 
-The flow must be resumable and idempotent.
+The only normal human decisions are:
 
-Supported engines:
+1. design/workload approval;
+2. engine selection: JMeter or Locust;
+3. RUN.
 
-- JMeter
-- Locust
+## APPROVAL HANDOFF
 
-Once selected, the engine cannot silently change.
+After the human approves design and workload:
 
-Real load requires exact:
+DO NOT call approve_test_plan.py.
 
-`RUN`
+DO NOT invoke approve, authorize, prepare, preflight or execute directly.
 
-After RUN, execute the validated bundle and return deterministic evidence.
+DO NOT invoke performance_workflow.py directly.
 
-Do not perform manual retries or CLI discovery.
+Enter the natural execution flow once.
 
-Do not call internal workflow operations directly.
+## ENGINE SELECTION
+
+ENGINE SELECTION happens before RUN.
+
+Gemini never chooses the engine for the user.
+
+RUN is not engine selection.
+
+STOP FOR RUN only after PRE_EXECUTION_READY.
+
+## EXECUTION COMPLETION
+
+Successful natural execution must synchronize:
+
+results/.state/last-execution.json
+
+When a professional report exists it must synchronize:
+
+results/.state/last-report.json
+
+Reporting must never guess the newest report directory.

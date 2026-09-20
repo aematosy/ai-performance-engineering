@@ -283,3 +283,23 @@ RUN only confirms execution of the already selected and validated engine.
 
 Once the engine is persisted, subsequent preparation, resume and execution must
 reuse that same engine unless the user explicitly starts a new approved flow.
+
+<!-- NATURAL_EXECUTION_HANDOFF_START -->
+
+## NATURAL EXECUTION HANDOFF
+
+After the user approves design and workload, do not invoke internal approval,
+authorization, prepare, preflight or execute operations directly.
+
+Use only:
+
+scripts/natural_performance_execute.sh --scenario "<scenario>"
+
+The natural flow owns approval persistence, engine selection, preparation,
+authorization, preflight, RUN gating, execution and completion state.
+
+The human chooses JMeter or Locust when requested.
+
+The human confirms actual load with RUN.
+
+<!-- NATURAL_EXECUTION_HANDOFF_END -->

@@ -1,85 +1,109 @@
 ---
 name: performance-test-runner
-description: Prepara y ejecuta de forma gobernada una prueba de rendimiento previamente aprobada usando JMeter o Locust.
+description: Prepara y ejecuta de forma gobernada pruebas de Performance Engineering previamente diseñadas y aprobadas.
 ---
 
 # Performance Test Runner
 
-Responde en español.
+Responde al usuario en español.
 
-## Public entrypoint
+## Principio principal
 
-Usa únicamente:
+El humano aprueba decisiones.
 
-`scripts/natural_performance_execute.sh`
+Gemini no orquesta operaciones internas.
 
-## Flujo
+## Único entrypoint normal de ejecución
 
-1. Reutiliza diseño aprobado.
-2. Reutiliza cualquier estado válido persistido.
-3. Permite seleccionar JMeter o Locust cuando corresponda.
-4. Prepara internamente el motor seleccionado.
-5. Presenta el resumen final.
-6. Espera `RUN`.
-7. Ejecuta.
-8. Presenta resultados.
+Usa exclusivamente:
 
-## Prohibido
+scripts/natural_performance_execute.sh
 
-No invoques directamente:
+Para continuar un escenario aprobado:
 
-- `performance_workflow.py approve`
-- `performance_workflow.py authorize`
-- `performance_workflow.py prepare`
-- `performance_workflow.py preflight`
-- `performance_workflow.py execute`
-- `run_governed_engine.py`
-- JMeter
-- Locust
+scripts/natural_performance_execute.sh --scenario "<scenario>"
 
-No ejecutes `--help`.
+No inspecciones el script.
 
-No reconstruyas argumentos internos.
+No ejecutes --help.
 
-No hagas retries manuales.
+No reconstruyas internamente el workflow.
 
-No regeneres JMX en un flujo Locust.
+## Después de aprobación humana
 
-No cambies target ni workload.
+Cuando el usuario diga que aprueba el diseño y el workload:
+
+NO invoques:
+
+- scripts/approve_test_plan.py;
+- approve;
+- authorize;
+- prepare;
+- preflight;
+- execute;
+- performance_workflow.py;
+- run_governed_engine.py.
+
+La aprobación humana ya fue expresada en conversación.
+
+Continúa únicamente mediante:
+
+scripts/natural_performance_execute.sh --scenario "<scenario>"
+
+## Selección de motor
+
+La selección JMeter / Locust pertenece al flujo natural.
+
+No selecciones el motor por el usuario.
+
+Si el flujo solicita selección:
+
+- presenta las opciones;
+- espera la decisión humana;
+- continúa con el mismo flujo natural.
+
+No invoques select-engine directamente.
 
 ## RUN
 
-La carga real requiere exactamente:
+RUN es el gate final de ejecución.
 
-`RUN`
+RUN no selecciona motor.
 
-No agregues una segunda confirmación.
+RUN no aprueba diseño.
 
-## Después de RUN
+RUN únicamente confirma el inicio de la carga ya preparada, autorizada y validada.
 
-No repitas:
+Antes de RUN debe existir un resumen PRE_EXECUTION_READY.
 
-- aprobación;
-- autorización;
-- selección de motor;
-- preparación;
-- preflight.
+## Reanudación
 
-Continúa únicamente con el flujo natural.
+Si existe estado válido:
 
-## Resultado
+- reutiliza aprobación;
+- reutiliza autorización;
+- reutiliza engine;
+- reutiliza preflight;
+- reutiliza artefactos válidos.
 
-Muestra:
+No repitas etapas completadas.
 
-- requests;
-- successes;
-- failures;
-- error rate;
-- throughput;
-- p95;
-- p99;
-- SLA;
-- results path;
-- report path.
+## Errores
 
-Después detente.
+Si el entrypoint natural devuelve un error técnico:
+
+- informa el error;
+- detente.
+
+No pruebes comandos internos alternativos.
+
+No hagas retries manuales con approve, authorize, prepare, preflight o execute.
+
+## Finalización
+
+Después de ejecución:
+
+- presenta el resumen devuelto por el flujo;
+- no reconstruyas métricas por tu cuenta;
+- no selecciones un reporte histórico distinto;
+- utiliza el estado/reporting asociado a esa ejecución.

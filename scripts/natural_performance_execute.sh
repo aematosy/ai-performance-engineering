@@ -10,6 +10,10 @@ ROOT="$(
 
 cd "${ROOT}"
 
+# Natural executions always request the post-execution professional bundle.
+# Report generation is post-execution and must never start load by itself.
+export PERF_AUTO_PROFESSIONAL_REPORT="${PERF_AUTO_PROFESSIONAL_REPORT:-1}"
+
 export PYTHONPATH="${ROOT}/src${PYTHONPATH:+:${PYTHONPATH}}"
 
 PYTHON="$(
@@ -120,5 +124,9 @@ exec_status=0
   scripts/natural_performance_execute.py \
   "$@" \
   || exec_status="$?"
+
+if [ "${exec_status}" -eq 0 ]; then
+  "${PYTHON}"     scripts/finalize_execution_state.py     -- "$@"     || echo "[WARN] Execution completed but state pointer synchronization failed."
+fi
 
 exit "${exec_status}"
