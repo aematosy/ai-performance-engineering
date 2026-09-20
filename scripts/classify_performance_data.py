@@ -4,7 +4,7 @@ from pathlib import Path
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-TARGET = ROOT / "src/performance_engineering/design/classify_performance_data.py"
+TARGET = ROOT / "src/performance_engineering/design/data/classifier.py"
 
 for candidate in (
     str(TARGET.parent),

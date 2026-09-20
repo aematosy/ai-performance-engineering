@@ -4,7 +4,7 @@ from pathlib import Path
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-TARGET = ROOT / "src/performance_engineering/design/compile_postman_scenario.py"
+TARGET = ROOT / "src/performance_engineering/design/compilers/postman_scenario.py"
 
 for candidate in (
     str(TARGET.parent),
