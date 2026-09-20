@@ -5,6 +5,10 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "${ROOT}"
 
+# Internal runtime bootstrap.
+# Users and AI clients must not need to configure PYTHONPATH.
+export PYTHONPATH="${ROOT}/src${PYTHONPATH:+:${PYTHONPATH}}"
+
 SCENARIO=""
 
 if \
