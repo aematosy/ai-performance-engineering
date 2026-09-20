@@ -148,7 +148,7 @@
       "id": 5,
       "targets": [
         {
-          "expr": "(max(up{job=\"locust\"}) or vector(0))",
+          "expr": "locust_metrics_up",
           "refId": "A"
         }
       ],

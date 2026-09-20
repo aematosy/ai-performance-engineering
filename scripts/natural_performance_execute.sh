@@ -63,6 +63,18 @@ cleanup() {
   if [ "${EXPORTER_STARTED}" = "true" ] \
     && [ -n "${EXPORTER_PID}" ]; then
 
+    curl \
+      -fsS \
+      -X POST \
+      http://localhost:9271/finish \
+      >/dev/null 2>&1 \
+      || true
+
+    # Prometheus scrapes Locust every 2 seconds.
+    # Keep the exporter alive long enough to publish
+    # the final INACTIVE/zero sample before shutdown.
+    sleep 4
+
     kill "${EXPORTER_PID}" \
       >/dev/null 2>&1 || true
 

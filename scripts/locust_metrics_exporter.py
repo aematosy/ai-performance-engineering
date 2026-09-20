@@ -31,6 +31,8 @@ class LocustMetrics:
 
         self.lock = threading.Lock()
 
+        self.finished = False
+
         self.values = {
             "locust_metrics_up": 1.0,
             "locust_active_users": 0.0,
@@ -166,6 +168,7 @@ class LocustMetrics:
     ) -> None:
         self.values.update(
             {
+                "locust_metrics_up": 0.0,
                 "locust_active_users": 0.0,
                 "locust_requests_per_second": 0.0,
                 "locust_failures_per_second": 0.0,
@@ -183,6 +186,11 @@ class LocustMetrics:
     def refresh(
         self,
     ) -> None:
+        with self.lock:
+            if self.finished:
+                self._reset_runtime_values()
+                return
+
         row = (
             self._load_latest_row()
         )
@@ -212,6 +220,8 @@ class LocustMetrics:
 
             self.values.update(
                 {
+                    "locust_metrics_up": 1.0,
+
                     "locust_active_users":
                         self._number(
                             row,
@@ -272,6 +282,14 @@ class LocustMetrics:
                         ),
                 }
             )
+
+    def finish(
+        self,
+    ) -> None:
+        with self.lock:
+            self.finished = True
+            self._reset_runtime_values()
+
 
     def render(
         self,
@@ -374,6 +392,43 @@ def main() -> int:
             self.wfile.write(
                 body
             )
+
+        def do_POST(
+            self,
+        ) -> None:
+            if self.path != "/finish":
+                self.send_response(
+                    404
+                )
+                self.end_headers()
+                return
+
+            metrics.finish()
+
+            body = b"OK\n"
+
+            self.send_response(
+                200
+            )
+
+            self.send_header(
+                "Content-Type",
+                "text/plain",
+            )
+
+            self.send_header(
+                "Content-Length",
+                str(
+                    len(body)
+                ),
+            )
+
+            self.end_headers()
+
+            self.wfile.write(
+                body
+            )
+
 
         def log_message(
             self,
