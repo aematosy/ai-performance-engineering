@@ -124,6 +124,7 @@ def build_design_profile(
     duration_seconds: int | None,
     ramp_time_seconds: int | None,
     pacing_seconds: float | None,
+    engine: str,
 ) -> Path:
     import yaml
 
@@ -251,6 +252,7 @@ def materialize_design_profile(
     duration_seconds: int | None,
     ramp_time_seconds: int | None,
     pacing_seconds: float | None,
+    engine: str,
 ) -> Path:
     """Materialize the effective design profile inside the workspace.
 
@@ -308,6 +310,7 @@ def materialize_design_profile(
             duration_seconds=duration_seconds,
             ramp_time_seconds=ramp_time_seconds,
             pacing_seconds=pacing_seconds,
+        engine=engine,
         )
 
     destination = (
@@ -550,6 +553,7 @@ def build_intake_command(
             duration_seconds=args.duration_seconds,
             ramp_time_seconds=args.ramp_time_seconds,
             pacing_seconds=args.pacing_seconds,
+            engine=args.engine,
         )
 
         command = python_command(
@@ -606,6 +610,7 @@ def build_intake_command(
             duration_seconds=args.duration_seconds,
             ramp_time_seconds=args.ramp_time_seconds,
             pacing_seconds=args.pacing_seconds,
+            engine=args.engine,
         )
     )
 
@@ -1813,6 +1818,19 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     intake.add_argument(
+        "--engine",
+        choices=(
+            "jmeter",
+            "locust",
+        ),
+        default="jmeter",
+        help=(
+            "Performance engine selected during design. "
+            "Default: jmeter."
+        ),
+    )
+
+    intake.add_argument(
         "--input",
         type=Path,
     )
@@ -1970,6 +1988,19 @@ def build_parser() -> argparse.ArgumentParser:
             help=(
                 "Run the controlled governed execution "
                 f"workflow in {name} mode."
+            ),
+        )
+
+        command.add_argument(
+            "--engine",
+            choices=(
+                "jmeter",
+                "locust",
+            ),
+            default="jmeter",
+            help=(
+                "Governed performance engine. "
+                "Must match the approved design."
             ),
         )
 
