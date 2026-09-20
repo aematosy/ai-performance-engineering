@@ -488,6 +488,33 @@ def main() -> int:
         "confirmación RUN."
     )
 
+
+    sync_command = [
+        sys.executable,
+        str(
+            ROOT
+            / "scripts"
+            / "sync_execution_contract.py"
+        ),
+        "--plan",
+        str(plan),
+        "--workspace",
+        str(workspace),
+    ]
+
+    sync_result = subprocess.run(
+        sync_command,
+        cwd=ROOT,
+        text=True,
+        check=False,
+    )
+
+    if sync_result.returncode != 0:
+        raise NaturalExecutionError(
+            "No se pudo sincronizar el contrato "
+            "funcional con los artefactos de ejecución."
+        )
+
     status, workload, authorization = (
         plan_status(
             plan
