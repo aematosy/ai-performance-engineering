@@ -126,7 +126,7 @@ def main() -> int:
     root = (
         Path(__file__)
         .resolve()
-        .parents[1]
+        .parents[4]
     )
 
     workspace = (

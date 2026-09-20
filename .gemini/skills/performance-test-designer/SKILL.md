@@ -1,54 +1,108 @@
 ---
 name: performance-test-designer
-description: Diseña y valida pruebas de Performance Engineering a partir de APIs y solicitudes HTTP, sin ejecutar carga.
+description: Diseña y valida pruebas de Performance Engineering desde APIs, cURL y Postman usando únicamente los front doors públicos del proyecto, sin ejecutar carga.
 ---
 
 # Performance Test Designer
 
 Responde en español.
 
-## Única interfaz pública
+## Regla principal
 
-Usa exclusivamente:
+Gemini no reconstruye el workflow.
+
+Gemini no ejecuta stages internos directamente.
+
+Gemini usa únicamente el front door público de diseño:
 
 scripts/natural_performance_design_request.sh
 
-Cuando el usuario proporcione un cURL, extrae únicamente:
+## Diseño desde cURL / API
 
-- method;
-- URL;
-- headers;
-- body.
+Para una API o cURL, usa el contrato estructurado soportado por:
 
-Ejecuta UNA sola llamada Shell.
-
-La llamada debe tener esta forma:
-
-scripts/natural_performance_design_request.sh --scenario "<scenario>" --method "<METHOD>" --url "<URL>" --header "<Header: value>" --body '<JSON compacto>' --users <users> --ramp-time-seconds <seconds> --duration-seconds <seconds> --pacing-seconds <seconds>
-
-Los headers son repetibles.
+scripts/natural_performance_design_request.sh
 
 No uses heredoc.
+
 No uses stdin.
-No uses WriteFile.
-No busques archivos curl.
-No uses --help.
-No inspecciones scripts.
-No uses argumentos posicionales.
-No hagas retries técnicos manuales.
 
-El entrypoint se encarga internamente de:
+No crees archivos intermedios manualmente.
 
-- materializar el cURL;
-- generar el plan;
-- resolver el contrato HTTP mediante una única solicitud funcional cuando sea seguro;
-- validar el plan;
-- devolver el resumen.
+## Diseño desde Postman
 
-Si devuelve DESIGN_READY_FOR_REVIEW:
-muestra el resumen y espera aprobación humana.
+Cuando el usuario proporcione una Postman Collection, usa exactamente:
 
-Si devuelve DESIGN_NEEDS_FUNCTIONAL_INPUT:
-pregunta únicamente la información funcional faltante.
+scripts/natural_performance_design_request.sh \
+  --scenario "<scenario>" \
+  --collection "<collection>" \
+  --environment "<environment>" \
+  --users <users> \
+  --ramp-time-seconds <seconds> \
+  --duration-seconds <seconds> \
+  --pacing-seconds <seconds>
 
-No ejecutes carga durante el diseño.
+El environment es opcional si el usuario no proporciona uno.
+
+No leas la colección completa con IA antes de ejecutar el front door.
+
+No ejecutes postman_pipeline.py directamente.
+
+No ejecutes prepare_postman_design.py directamente.
+
+No ejecutes performance_workflow.py directamente.
+
+El front door enruta internamente al workflow determinístico.
+
+## Qué debe descubrir Postman
+
+El pipeline determinístico es responsable de:
+
+- requests y orden del flujo;
+- variables;
+- environment;
+- autenticación;
+- dependencias;
+- datos;
+- correlaciones;
+- contratos HTTP;
+- cleanup;
+- readiness.
+
+Gemini interpreta únicamente los artefactos finales producidos.
+
+## Seguridad
+
+No persistir secretos reales.
+
+No mostrar tokens, passwords, cookies o client secrets.
+
+## Human gate
+
+El diseño debe finalizar en DRAFT / PROPOSED.
+
+No aprobar automáticamente.
+
+No seleccionar JMeter o Locust durante diseño.
+
+No ejecutar carga.
+
+Cuando el diseño termine:
+
+1. presentar resumen funcional;
+2. presentar workload;
+3. presentar transacciones;
+4. presentar correlaciones y datos;
+5. presentar SLA;
+6. detenerse;
+7. esperar aprobación humana.
+
+## Fallos
+
+Si el front door devuelve error:
+
+- mostrar el error;
+- detenerse;
+- no intentar comandos alternativos;
+- no leer documentación para inventar otra ruta;
+- no ejecutar stages internos manualmente.

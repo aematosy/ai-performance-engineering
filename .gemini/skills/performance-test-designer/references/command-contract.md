@@ -1,31 +1,37 @@
-# Natural Design Request Contract
+# Natural Design Command Contract
 
-The only public design command is:
+## Single public front door
+
+Use only:
 
 scripts/natural_performance_design_request.sh
 
-Use one non-interactive Shell invocation.
+## Postman
 
-Required request arguments:
+Supported invocation:
 
---scenario
---method
---url
---header
---body
---users
---ramp-time-seconds
---duration-seconds
---pacing-seconds
+scripts/natural_performance_design_request.sh \
+  --scenario "<scenario>" \
+  --collection "<collection>" \
+  --environment "<environment>" \
+  --users <users> \
+  --ramp-time-seconds <seconds> \
+  --duration-seconds <seconds> \
+  --pacing-seconds <seconds>
 
-Forbidden:
+The front door owns routing into the deterministic Postman workflow.
 
-- heredoc
-- stdin
-- WriteFile
-- input discovery
-- positional arguments
-- --help
-- manual retries
+Do not call:
 
-The public front door owns cURL materialization, contract probing and validation.
+- performance_workflow.py directly;
+- prepare_postman_design.py directly;
+- postman_pipeline.py directly;
+- generate_postman_jmx.py directly;
+- review_test_plan.py directly;
+- validate_test_plan.py directly.
+
+Design never executes performance load.
+
+Design never chooses JMeter or Locust.
+
+Human approval occurs after the validated design summary.

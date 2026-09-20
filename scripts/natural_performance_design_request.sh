@@ -3,448 +3,304 @@
 set -euo pipefail
 
 ROOT="$(
-  cd "$(dirname "${BASH_SOURCE[0]}")/.." \
-    >/dev/null 2>&1
+  cd "$(dirname "${BASH_SOURCE[0]}")/.." >/dev/null 2>&1
   pwd
 )"
 
 cd "${ROOT}"
 
 SCENARIO=""
-METHOD=""
-URL=""
-BODY=""
+COLLECTION=""
+ENVIRONMENT=""
 USERS=""
 RAMP=""
 DURATION=""
 PACING=""
 
-HEADERS=()
+ORIGINAL_ARGS=("$@")
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --scenario)
-      SCENARIO="${2:-}"
+      [ "$#" -ge 2 ] || {
+        echo "DESIGN ERROR: --scenario requires a value." >&2
+        exit 2
+      }
+      SCENARIO="$2"
       shift 2
       ;;
 
-    --method)
-      METHOD="${2:-}"
+    --collection)
+      [ "$#" -ge 2 ] || {
+        echo "DESIGN ERROR: --collection requires a value." >&2
+        exit 2
+      }
+      COLLECTION="$2"
       shift 2
       ;;
 
-    --url)
-      URL="${2:-}"
-      shift 2
-      ;;
-
-    --header)
-      HEADERS+=("${2:-}")
-      shift 2
-      ;;
-
-    --body)
-      BODY="${2:-}"
+    --environment)
+      [ "$#" -ge 2 ] || {
+        echo "DESIGN ERROR: --environment requires a value." >&2
+        exit 2
+      }
+      ENVIRONMENT="$2"
       shift 2
       ;;
 
     --users)
-      USERS="${2:-}"
+      [ "$#" -ge 2 ] || {
+        echo "DESIGN ERROR: --users requires a value." >&2
+        exit 2
+      }
+      USERS="$2"
       shift 2
       ;;
 
     --ramp-time-seconds)
-      RAMP="${2:-}"
+      [ "$#" -ge 2 ] || {
+        echo "DESIGN ERROR: --ramp-time-seconds requires a value." >&2
+        exit 2
+      }
+      RAMP="$2"
       shift 2
       ;;
 
     --duration-seconds)
-      DURATION="${2:-}"
+      [ "$#" -ge 2 ] || {
+        echo "DESIGN ERROR: --duration-seconds requires a value." >&2
+        exit 2
+      }
+      DURATION="$2"
       shift 2
       ;;
 
     --pacing-seconds)
-      PACING="${2:-}"
+      [ "$#" -ge 2 ] || {
+        echo "DESIGN ERROR: --pacing-seconds requires a value." >&2
+        exit 2
+      }
+      PACING="$2"
       shift 2
       ;;
 
     *)
-      echo "DESIGN REQUEST ERROR: argumento no reconocido: $1" >&2
-      exit 2
+      shift
       ;;
   esac
 done
 
-require_value() {
-  local name="$1"
-  local value="$2"
+# ------------------------------------------------------------
+# POSTMAN
+# ------------------------------------------------------------
 
-  if [ -z "${value}" ]; then
-    echo "DESIGN REQUEST ERROR: falta ${name}" >&2
+if [ -n "${COLLECTION}" ]; then
+
+  [ -n "${SCENARIO}" ] || {
+    echo "DESIGN ERROR: Postman design requires --scenario." >&2
+    exit 2
+  }
+
+  [ -n "${USERS}" ] || {
+    echo "DESIGN ERROR: Postman design requires --users." >&2
+    exit 2
+  }
+
+  [ -n "${DURATION}" ] || {
+    echo "DESIGN ERROR: Postman design requires --duration-seconds." >&2
+    exit 2
+  }
+
+  [ -f "${COLLECTION}" ] || {
+    echo "DESIGN ERROR: Postman collection not found: ${COLLECTION}" >&2
+    exit 2
+  }
+
+  if [ -n "${ENVIRONMENT}" ] && [ ! -f "${ENVIRONMENT}" ]; then
+    echo "DESIGN ERROR: Postman environment not found: ${ENVIRONMENT}" >&2
     exit 2
   fi
-}
 
-require_value "--scenario" "${SCENARIO}"
-require_value "--method" "${METHOD}"
-require_value "--url" "${URL}"
-require_value "--users" "${USERS}"
-require_value "--ramp-time-seconds" "${RAMP}"
-require_value "--duration-seconds" "${DURATION}"
-require_value "--pacing-seconds" "${PACING}"
+  WORKSPACE="workspaces/${SCENARIO}"
 
-INPUT_DIR="${ROOT}/inputs/curl"
-INPUT="${INPUT_DIR}/${SCENARIO}.curl"
+  rm -rf "${WORKSPACE}"
 
-mkdir -p "${INPUT_DIR}"
+  COMMAND=(
+    poetry run python
+    scripts/performance_workflow.py
+    intake
+    --input "${COLLECTION}"
+    --input-type postman
+    --workspace "${WORKSPACE}"
+    --users "${USERS}"
+    --duration-seconds "${DURATION}"
+  )
 
-export DESIGN_METHOD="${METHOD}"
-export DESIGN_URL="${URL}"
-export DESIGN_BODY="${BODY}"
-export DESIGN_INPUT="${INPUT}"
-
-HEADER_FILE="$(
-  mktemp
-)"
-
-cleanup() {
-  rm -f "${HEADER_FILE}"
-}
-
-trap cleanup EXIT
-
-if [ "${#HEADERS[@]}" -gt 0 ]; then
-  printf '%s\n' "${HEADERS[@]}" > "${HEADER_FILE}"
-fi
-
-export DESIGN_HEADER_FILE="${HEADER_FILE}"
-
-PYTHON="$(
-  poetry run which python
-)"
-
-"${PYTHON}" - <<'PY'
-from __future__ import annotations
-
-import os
-from pathlib import Path
-
-
-method = os.environ["DESIGN_METHOD"].strip().upper()
-url = os.environ["DESIGN_URL"].strip()
-body = os.environ.get("DESIGN_BODY", "")
-input_path = Path(os.environ["DESIGN_INPUT"])
-header_file = Path(os.environ["DESIGN_HEADER_FILE"])
-
-
-def quote(value: str) -> str:
-    return "'" + value.replace("'", "'\"'\"'") + "'"
-
-
-headers = []
-
-if header_file.is_file():
-    headers = [
-        line.rstrip("\n")
-        for line in header_file.read_text(
-            encoding="utf-8"
-        ).splitlines()
-        if line.strip()
-    ]
-
-
-parts = [
-    f"curl --request {method}",
-    f"--url {quote(url)}",
-]
-
-for header in headers:
-    parts.append(
-        f"--header {quote(header)}"
+  if [ -n "${ENVIRONMENT}" ]; then
+    COMMAND+=(
+      --environment "${ENVIRONMENT}"
     )
-
-if body:
-    parts.append(
-        f"--data {quote(body)}"
-    )
-
-
-lines = []
-
-for index, part in enumerate(parts):
-    suffix = " \\" if index < len(parts) - 1 else ""
-
-    if index == 0:
-        lines.append(
-            part + suffix
-        )
-    else:
-        lines.append(
-            "  " + part + suffix
-        )
-
-
-input_path.write_text(
-    "\n".join(lines) + "\n",
-    encoding="utf-8",
-)
-
-print(
-    "[OK] Input materializado:",
-    input_path,
-)
-PY
-
-echo
-echo "======================================================================"
-echo "DISEÑANDO PRUEBA"
-echo "======================================================================"
-
-scripts/natural_performance_design.sh \
-  --input "${INPUT}" \
-  --scenario "${SCENARIO}" \
-  --users "${USERS}" \
-  --ramp-time-seconds "${RAMP}" \
-  --duration-seconds "${DURATION}" \
-  --pacing-seconds "${PACING}"
-
-PLAN="${ROOT}/tests/plans/${SCENARIO}/test-plan.yaml"
-
-if [ ! -f "${PLAN}" ]; then
-  echo "DESIGN REQUEST ERROR: no se generó ${PLAN}" >&2
-  exit 2
-fi
-
-echo
-echo "======================================================================"
-echo "VALIDANDO CONTRATO HTTP"
-echo "======================================================================"
-
-NEEDS_CONTRACT="$(
-  PLAN_PATH="${PLAN}" \
-  "${PYTHON}" - <<'PY'
-from __future__ import annotations
-
-import os
-from pathlib import Path
-
-import yaml
-
-
-path = Path(
-    os.environ["PLAN_PATH"]
-)
-
-payload = yaml.safe_load(
-    path.read_text(
-        encoding="utf-8"
-    )
-)
-
-transactions = (
-    payload.get("transactions")
-    or []
-)
-
-if not transactions:
-    print("yes")
-    raise SystemExit(0)
-
-value = transactions[0].get(
-    "expected_status"
-)
-
-unresolved = str(
-    value
-).strip().upper() in {
-    "",
-    "NONE",
-    "UNRESOLVED",
-}
-
-print(
-    "yes"
-    if unresolved
-    else "no"
-)
-PY
-)"
-
-if [ "${NEEDS_CONTRACT}" = "yes" ]; then
-  set +e
-
-  "${PYTHON}" \
-    scripts/resolve_functional_response_contract.py \
-    --plan "${PLAN}" \
-    --curl "${INPUT}"
-
-  CONTRACT_RC="$?"
-
-  set -e
-
-  if [ "${CONTRACT_RC}" -ne 0 ] \
-    && [ "${CONTRACT_RC}" -ne 2 ]; then
-
-    echo "DESIGN REQUEST ERROR: falló la validación funcional." >&2
-    exit "${CONTRACT_RC}"
   fi
-fi
 
-echo
-echo "======================================================================"
-echo "VALIDANDO PLAN FINAL"
-echo "======================================================================"
+  if [ -n "${RAMP}" ]; then
+    COMMAND+=(
+      --ramp-time-seconds "${RAMP}"
+    )
+  fi
 
-"${PYTHON}" \
-  scripts/validate_test_plan.py \
-  --plan "${PLAN}"
+  if [ -n "${PACING}" ]; then
+    COMMAND+=(
+      --pacing-seconds "${PACING}"
+    )
+  fi
 
-echo
-echo "======================================================================"
-echo "RESUMEN DEL DISEÑO"
-echo "======================================================================"
+  echo
+  echo "======================================================================"
+  echo "NATURAL PERFORMANCE DESIGN - POSTMAN"
+  echo "======================================================================"
+  echo "Scenario    : ${SCENARIO}"
+  echo "Collection  : ${COLLECTION}"
 
-PLAN_PATH="${PLAN}" \
-"${PYTHON}" - <<'PY'
-from __future__ import annotations
+  if [ -n "${ENVIRONMENT}" ]; then
+    echo "Environment : ${ENVIRONMENT}"
+  fi
 
-import os
+  echo "Users       : ${USERS}"
+  echo "Ramp-up     : ${RAMP:-profile default}"
+  echo "Duration    : ${DURATION}"
+  echo "Pacing      : ${PACING:-profile default}"
+  echo "Load        : NOT EXECUTED"
+  echo "======================================================================"
+  echo
+
+  "${COMMAND[@]}"
+
+  MANIFEST="${WORKSPACE}/design-manifest.json"
+
+  if [ ! -f "${MANIFEST}" ]; then
+    echo
+    echo "DESIGN ERROR: deterministic Postman intake completed but design-manifest.json was not produced:"
+    echo "${MANIFEST}"
+    echo
+    echo "No performance load was executed."
+    exit 2
+  fi
+
+  DESIGN_STATE="$(
+    "${PYTHON:-python3}" - "${MANIFEST}" <<'PYJSON'
+import json
+import sys
 from pathlib import Path
 
-import yaml
+manifest = Path(sys.argv[1])
 
-
-path = Path(
-    os.environ["PLAN_PATH"]
-)
-
-payload = yaml.safe_load(
-    path.read_text(
+data = json.loads(
+    manifest.read_text(
         encoding="utf-8"
     )
 )
 
-transactions = (
-    payload.get("transactions")
-    or []
-)
-
-workload = (
-    payload.get("workload")
-    or {}
-)
-
-parameters = (
-    workload.get("parameters")
-    or {}
-)
-
-sla = (
-    payload.get("sla")
-    or {}
-)
-
-transaction = (
-    transactions[0]
-    if transactions
-    else {}
-)
-
-status = transaction.get(
-    "expected_status",
-    "UNRESOLVED",
-)
-
-method = transaction.get(
-    "method",
-    "",
-)
-
-target = payload.get(
-    "target"
-) or {}
-
-protocol = target.get(
-    "protocol",
-    "https",
-)
-
-host = target.get(
-    "host",
-    "",
-)
-
-path_value = transaction.get(
-    "path",
-    "",
-)
-
-print(
-    f"Escenario       : {payload.get('metadata', {}).get('name')}"
-)
-
-print(
-    f"Target          : {method} {protocol}://{host}{path_value}"
-)
-
-print(
-    f"HTTP esperado   : {status}"
-)
-
-print(
-    f"Usuarios        : {parameters.get('threads')}"
-)
-
-print(
-    f"Ramp-up         : {parameters.get('ramp_time_seconds')} s"
-)
-
-print(
-    f"Duración        : {parameters.get('duration_seconds')} s"
-)
-
-print(
-    f"Pacing          : {parameters.get('pacing_seconds')} s"
-)
-
-print(
-    f"Error rate SLA  : <= {sla.get('error_rate_threshold_pct')}%"
-)
-
-print(
-    f"p95 SLA         : <= {sla.get('p95_threshold_ms')} ms"
-)
-
-print(
-    f"p99 SLA         : <= {sla.get('p99_threshold_ms')} ms"
-)
-
-unresolved = str(
-    status
-).strip().upper() in {
-    "",
-    "NONE",
-    "UNRESOLVED",
-}
-
-print()
-
-if unresolved:
-    print(
-        "Estado          : DESIGN_NEEDS_FUNCTIONAL_INPUT"
+scenario = str(
+    data.get(
+        "scenario",
+        ""
     )
-else:
-    print(
-        "Estado          : DESIGN_READY_FOR_REVIEW"
+).strip()
+
+status = str(
+    data.get(
+        "status",
+        ""
+    )
+).strip()
+
+artifacts = (
+    data.get(
+        "artifacts"
+    )
+    or {}
+)
+
+plan_directory = str(
+    artifacts.get(
+        "plan_directory",
+        ""
+    )
+).strip()
+
+if not scenario:
+    raise SystemExit(
+        "design manifest has no canonical scenario"
     )
 
-print()
-print(
-    "No se ejecutó carga de performance."
-)
-PY
+if status != "DESIGN_ARTIFACTS_READY":
+    raise SystemExit(
+        "design manifest is not DESIGN_ARTIFACTS_READY"
+    )
 
-echo
-echo "======================================================================"
-echo "DESIGN REQUEST COMPLETE"
-echo "======================================================================"
+if not plan_directory:
+    raise SystemExit(
+        "design manifest has no plan_directory"
+    )
+
+plan = (
+    Path(plan_directory)
+    / "test-plan.yaml"
+).resolve()
+
+if not plan.is_file():
+    raise SystemExit(
+        f"canonical plan does not exist: {plan}"
+    )
+
+print(
+    scenario
+)
+
+print(
+    plan
+)
+PYJSON
+  )"
+
+  CANONICAL_SCENARIO="$(
+    printf '%s
+' "${DESIGN_STATE}"       | sed -n '1p'
+  )"
+
+  PLAN="$(
+    printf '%s
+' "${DESIGN_STATE}"       | sed -n '2p'
+  )"
+
+  if [ -z "${CANONICAL_SCENARIO}" ]     || [ -z "${PLAN}" ]; then
+
+    echo
+    echo "DESIGN ERROR: unable to resolve canonical Postman design state."
+    echo
+    echo "No performance load was executed."
+    exit 2
+  fi
+
+  echo
+  echo "======================================================================"
+  echo "POSTMAN DESIGN READY"
+  echo "======================================================================"
+  echo "Request id         : ${SCENARIO}"
+  echo "Canonical scenario : ${CANONICAL_SCENARIO}"
+  echo "Plan               : ${PLAN}"
+  echo "Load               : NOT EXECUTED"
+  echo "Next               : HUMAN REVIEW / APPROVAL"
+  echo "======================================================================"
+
+  exit 0
+fi
+
+# ------------------------------------------------------------
+# HTTP / CURL / STRUCTURED SINGLE-API
+# Preserve the already validated front door unchanged.
+# ------------------------------------------------------------
+
+exec \
+  "${ROOT}/scripts/natural_performance_design_http.sh" \
+  "${ORIGINAL_ARGS[@]}"
