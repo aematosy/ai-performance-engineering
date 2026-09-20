@@ -167,8 +167,8 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
-        "w": 12,
+        "h": 9,
+        "w": 8,
         "x": 0,
         "y": 5
       },
@@ -176,11 +176,11 @@
       "targets": [
         {
           "expr": "locust_requests_per_second",
-          "legendFormat": "requests/s",
+          "legendFormat": "POST /products/add",
           "refId": "A"
         }
       ],
-      "title": "Throughput",
+      "title": "Throughput by Sampler",
       "type": "timeseries"
     },
     {
@@ -195,9 +195,9 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
+        "h": 9,
+        "w": 8,
+        "x": 8,
         "y": 5
       },
       "id": 7,
@@ -227,10 +227,10 @@
         "uid": "prometheus"
       },
       "gridPos": {
-        "h": 8,
+        "h": 9,
         "w": 8,
-        "x": 0,
-        "y": 13
+        "x": 16,
+        "y": 5
       },
       "id": 8,
       "targets": [
@@ -240,7 +240,7 @@
           "refId": "A"
         }
       ],
-      "title": "Virtual Users",
+      "title": "Virtual Users Over Time",
       "type": "timeseries"
     },
     {
@@ -255,10 +255,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
+        "h": 9,
         "w": 8,
-        "x": 8,
-        "y": 13
+        "x": 0,
+        "y": 14
       },
       "id": 9,
       "targets": [
@@ -268,7 +268,7 @@
           "refId": "A"
         }
       ],
-      "title": "Failures",
+      "title": "Errors by Sampler",
       "type": "timeseries"
     },
     {
@@ -276,46 +276,73 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
       "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 16,
-        "y": 13
+        "h": 9,
+        "w": 6,
+        "x": 8,
+        "y": 14
       },
       "id": 10,
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      },
       "targets": [
         {
-          "expr": "locust_total_requests",
-          "legendFormat": "requests",
+          "expr": "max_over_time(locust_total_requests[$__range])",
           "refId": "A"
-        },
-        {
-          "expr": "locust_total_failures",
-          "legendFormat": "failures",
-          "refId": "B"
         }
       ],
-      "title": "Requests / Failures",
-      "type": "timeseries"
+      "title": "Total Requests",
+      "type": "gauge"
+    },
+    {
+      "gridPos": {
+        "h": 9,
+        "w": 10,
+        "x": 14,
+        "y": 14
+      },
+      "id": 11,
+      "options": {
+        "content": "## Cómo interpretar este dashboard\n\n### Durante una ejecución\n\nLos indicadores superiores muestran el estado actual de **Locust**:\n\n- throughput actual;\n- p95 actual;\n- tasa de errores;\n- usuarios virtuales activos;\n- estado de las métricas Locust.\n\nLos gráficos muestran la evolución temporal de la ejecución.\n\n**Total Requests** representa las solicitudes acumuladas observadas durante la prueba.\n\n### Cuando la prueba finaliza\n\n- Current Throughput vuelve a `0 req/s`;\n- Current p95 vuelve a `0 ms`;\n- Error Rate vuelve a `0%`;\n- Active Virtual Users vuelve a `0`;\n- Locust Metrics cambia a `INACTIVE`;\n- los históricos permanecen visibles mientras estén dentro del rango temporal seleccionado;\n- Total Requests conserva el total observado de la ejecución dentro del rango mostrado.",
+        "mode": "markdown"
+      },
+      "title": "Información",
+      "type": "text"
     }
   ],
-  "refresh": "2s",
+  "refresh": "5s",
   "schemaVersion": 39,
   "tags": [
+    "ai-demo",
     "locust",
     "performance",
-    "prometheus",
-    "ai-demo"
+    "prometheus"
   ],
   "templating": {
     "list": []
   },
   "time": {
-    "from": "now-15m",
+    "from": "now-1h",
     "to": "now"
   },
   "timezone": "browser",
   "title": "AI Performance Engineering - Locust Live",
   "uid": "ai-performance-locust",
-  "version": 1
+  "version": 2
 }
