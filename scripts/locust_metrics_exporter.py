@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import csv
 import threading
+import time
 from http.server import (
     BaseHTTPRequestHandler,
     ThreadingHTTPServer,
@@ -16,12 +17,17 @@ class LocustMetrics:
     def __init__(
         self,
         results_root: Path,
+        scenario: str,
+        started_at: float,
     ) -> None:
         self.results_root = (
             results_root
             .expanduser()
             .resolve()
         )
+
+        self.scenario = scenario
+        self.started_at = started_at
 
         self.lock = threading.Lock()
 
@@ -40,26 +46,43 @@ class LocustMetrics:
             "locust_response_time_max_ms": 0.0,
         }
 
-    def _latest_history(
+    @property
+    def execution_dir(
         self,
-    ) -> Path | None:
-        if not self.results_root.exists():
-            return None
-
-        candidates = list(
-            self.results_root.rglob(
-                "*_stats_history.csv"
-            )
+    ) -> Path:
+        return (
+            self.results_root
+            / f"locust-{self.scenario}"
         )
 
-        if not candidates:
-            return None
+    @property
+    def history_file(
+        self,
+    ) -> Path:
+        return (
+            self.execution_dir
+            / "locust_stats_history.csv"
+        )
 
-        return max(
-            candidates,
-            key=lambda item: (
-                item.stat().st_mtime
-            ),
+    def _history_is_current(
+        self,
+    ) -> bool:
+        path = self.history_file
+
+        if not path.exists():
+            return False
+
+        try:
+            modified = (
+                path.stat()
+                .st_mtime
+            )
+        except OSError:
+            return False
+
+        return (
+            modified
+            >= self.started_at - 2
         )
 
     @staticmethod
@@ -86,22 +109,20 @@ class LocustMetrics:
                 TypeError,
                 ValueError,
             ):
-                continue
+                pass
 
         return 0.0
 
     def _load_latest_row(
         self,
     ) -> dict[str, str] | None:
-        history = (
-            self._latest_history()
-        )
+        path = self.history_file
 
-        if history is None:
+        if not self._history_is_current():
             return None
 
         try:
-            with history.open(
+            with path.open(
                 "r",
                 encoding="utf-8",
                 newline="",
@@ -140,6 +161,25 @@ class LocustMetrics:
 
         return rows[-1]
 
+    def _reset_runtime_values(
+        self,
+    ) -> None:
+        self.values.update(
+            {
+                "locust_active_users": 0.0,
+                "locust_requests_per_second": 0.0,
+                "locust_failures_per_second": 0.0,
+                "locust_total_requests": 0.0,
+                "locust_total_failures": 0.0,
+                "locust_error_rate_pct": 0.0,
+                "locust_response_time_avg_ms": 0.0,
+                "locust_response_time_p50_ms": 0.0,
+                "locust_response_time_p95_ms": 0.0,
+                "locust_response_time_p99_ms": 0.0,
+                "locust_response_time_max_ms": 0.0,
+            }
+        )
+
     def refresh(
         self,
     ) -> None:
@@ -147,93 +187,90 @@ class LocustMetrics:
             self._load_latest_row()
         )
 
-        if row is None:
-            return
-
-        requests = self._number(
-            row,
-            "Total Request Count",
-        )
-
-        failures = self._number(
-            row,
-            "Total Failure Count",
-        )
-
-        error_rate = (
-            failures
-            / requests
-            * 100.0
-            if requests > 0
-            else 0.0
-        )
-
-        values = {
-            "locust_metrics_up": 1.0,
-
-            "locust_active_users":
-                self._number(
-                    row,
-                    "User Count",
-                ),
-
-            "locust_requests_per_second":
-                self._number(
-                    row,
-                    "Requests/s",
-                ),
-
-            "locust_failures_per_second":
-                self._number(
-                    row,
-                    "Failures/s",
-                ),
-
-            "locust_total_requests":
-                requests,
-
-            "locust_total_failures":
-                failures,
-
-            "locust_error_rate_pct":
-                error_rate,
-
-            "locust_response_time_avg_ms":
-                self._number(
-                    row,
-                    "Total Average Response Time",
-                    "Average Response Time",
-                ),
-
-            "locust_response_time_p50_ms":
-                self._number(
-                    row,
-                    "50%",
-                ),
-
-            "locust_response_time_p95_ms":
-                self._number(
-                    row,
-                    "95%",
-                ),
-
-            "locust_response_time_p99_ms":
-                self._number(
-                    row,
-                    "99%",
-                ),
-
-            "locust_response_time_max_ms":
-                self._number(
-                    row,
-                    "Total Max Response Time",
-                    "Max Response Time",
-                ),
-        }
-
         with self.lock:
+            if row is None:
+                self._reset_runtime_values()
+                return
+
+            requests = self._number(
+                row,
+                "Total Request Count",
+            )
+
+            failures = self._number(
+                row,
+                "Total Failure Count",
+            )
+
+            error_rate = (
+                failures
+                / requests
+                * 100.0
+                if requests > 0
+                else 0.0
+            )
+
             self.values.update(
-                values
+                {
+                    "locust_active_users":
+                        self._number(
+                            row,
+                            "User Count",
+                        ),
+
+                    "locust_requests_per_second":
+                        self._number(
+                            row,
+                            "Requests/s",
+                        ),
+
+                    "locust_failures_per_second":
+                        self._number(
+                            row,
+                            "Failures/s",
+                        ),
+
+                    "locust_total_requests":
+                        requests,
+
+                    "locust_total_failures":
+                        failures,
+
+                    "locust_error_rate_pct":
+                        error_rate,
+
+                    "locust_response_time_avg_ms":
+                        self._number(
+                            row,
+                            "Total Average Response Time",
+                            "Average Response Time",
+                        ),
+
+                    "locust_response_time_p50_ms":
+                        self._number(
+                            row,
+                            "50%",
+                        ),
+
+                    "locust_response_time_p95_ms":
+                        self._number(
+                            row,
+                            "95%",
+                        ),
+
+                    "locust_response_time_p99_ms":
+                        self._number(
+                            row,
+                            "99%",
+                        ),
+
+                    "locust_response_time_max_ms":
+                        self._number(
+                            row,
+                            "Total Max Response Time",
+                            "Max Response Time",
+                        ),
+                }
             )
 
     def render(
@@ -246,19 +283,19 @@ class LocustMetrics:
                 self.values
             )
 
-        output = []
+        lines = []
 
         for name, value in values.items():
-            output.append(
+            lines.append(
                 f"# TYPE {name} gauge"
             )
-            output.append(
+            lines.append(
                 f"{name} {value}"
             )
 
         return (
             "\n".join(
-                output
+                lines
             )
             + "\n"
         ).encode(
@@ -272,9 +309,12 @@ def main() -> int:
     parser.add_argument(
         "--results-root",
         type=Path,
-        default=Path(
-            "results"
-        ),
+        required=True,
+    )
+
+    parser.add_argument(
+        "--scenario",
+        required=True,
     )
 
     parser.add_argument(
@@ -285,8 +325,12 @@ def main() -> int:
 
     args = parser.parse_args()
 
+    started_at = time.time()
+
     metrics = LocustMetrics(
-        args.results_root
+        results_root=args.results_root,
+        scenario=args.scenario,
+        started_at=started_at,
     )
 
     class Handler(
@@ -296,8 +340,8 @@ def main() -> int:
             self,
         ) -> None:
             if self.path not in (
-                "/metrics",
                 "/",
+                "/metrics",
             ):
                 self.send_response(
                     404
@@ -310,12 +354,12 @@ def main() -> int:
             self.send_response(
                 200
             )
+
             self.send_header(
                 "Content-Type",
-                "text/plain; "
-                "version=0.0.4; "
-                "charset=utf-8",
+                "text/plain; version=0.0.4",
             )
+
             self.send_header(
                 "Content-Length",
                 str(
@@ -324,7 +368,9 @@ def main() -> int:
                     )
                 ),
             )
+
             self.end_headers()
+
             self.wfile.write(
                 body
             )
@@ -345,9 +391,22 @@ def main() -> int:
     )
 
     print(
-        "Locust Prometheus metrics available at "
+        "Locust metrics exporter"
+    )
+
+    print(
+        "Scenario:",
+        args.scenario,
+    )
+
+    print(
+        "Execution directory:",
+        metrics.execution_dir,
+    )
+
+    print(
+        "Metrics:",
         f"http://localhost:{args.port}/metrics",
-        flush=True,
     )
 
     server.serve_forever()
