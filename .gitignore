@@ -85,3 +85,6 @@ workspaces/
 # Local runtime properties / secrets
 *.properties
 !*.properties.template
+
+# Generated Locust artifacts
+tests/generated/locust/

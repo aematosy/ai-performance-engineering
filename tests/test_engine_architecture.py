@@ -17,6 +17,9 @@ from performance_engineering.domain.engine_type import (
 from performance_engineering.engines.jmeter import (
     JMeterEngine,
 )
+from performance_engineering.engines.locust import (
+    LocustEngine,
+)
 
 
 class PerformanceEngineArchitectureTests(
@@ -35,6 +38,21 @@ class PerformanceEngineArchitectureTests(
         self.assertEqual(
             engine.name,
             EngineType.JMETER.value,
+        )
+
+    def test_locust_implements_engine_contract(
+        self,
+    ):
+        engine = LocustEngine(ROOT)
+
+        self.assertIsInstance(
+            engine,
+            PerformanceEngine,
+        )
+
+        self.assertEqual(
+            engine.name,
+            EngineType.LOCUST.value,
         )
 
     def test_engine_types_are_explicit(
