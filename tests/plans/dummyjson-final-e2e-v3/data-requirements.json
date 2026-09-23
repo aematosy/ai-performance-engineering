@@ -1,0 +1,12 @@
+{
+  "schema_version": "1.0",
+  "scenario": "dummyjson-final-e2e-v3",
+  "status": "APPROVED",
+  "strategy": "NONE",
+  "fields": [],
+  "secrets": [],
+  "scenario_candidate": {
+    "id": "dummyjson-final-e2e-v3",
+    "type": "SINGLE_REQUEST"
+  }
+}

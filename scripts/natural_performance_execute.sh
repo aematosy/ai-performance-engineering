@@ -89,38 +89,12 @@ cleanup() {
 
 trap cleanup EXIT INT TERM
 
-PORT_PID="$(
-  lsof \
-    -tiTCP:9271 \
-    -sTCP:LISTEN \
-    2>/dev/null \
-    | head -1 \
-    || true
-)"
-
-if [ -n "${PORT_PID}" ]; then
-  kill "${PORT_PID}" \
-    >/dev/null 2>&1 || true
-
-  sleep 1
-fi
-
-"${PYTHON}" \
-  scripts/locust_metrics_exporter.py \
-  --results-root "${ROOT}/results" \
-  --scenario "${SCENARIO}" \
-  --port 9271 \
-  >/tmp/demo-agent-perf-locust-exporter.log \
-  2>&1 &
-
-EXPORTER_PID="$!"
-EXPORTER_STARTED="true"
-
-sleep 1
-
 exec_status=0
 
 RESOLVED_ARGS=("$@")
+
+REQUESTED_SCENARIO="${SCENARIO}"
+CANONICAL_SCENARIO="${SCENARIO}"
 
 for ((i=0; i<${#RESOLVED_ARGS[@]}; i++)); do
   if [ "${RESOLVED_ARGS[$i]}" = "--scenario" ]; then
@@ -149,6 +123,69 @@ for ((i=0; i<${#RESOLVED_ARGS[@]}; i++)); do
     break
   fi
 done
+
+PROFILE_PATH="${ROOT}/workspaces/${REQUESTED_SCENARIO}/execution-profile.yaml"
+
+ENGINE=""
+
+if [ -f "${PROFILE_PATH}" ]; then
+  ENGINE="$(
+    "${PYTHON}" - "${PROFILE_PATH}" <<'PY'
+import sys
+from pathlib import Path
+import yaml
+
+path = Path(sys.argv[1])
+payload = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+print(str(payload.get("engine", "")).strip().lower())
+PY
+  )"
+fi
+
+if [ "${ENGINE}" = "locust" ]; then
+  PORT_PID="$(
+    lsof \
+      -tiTCP:9271 \
+      -sTCP:LISTEN \
+      2>/dev/null \
+      | head -1 \
+      || true
+  )"
+
+  if [ -n "${PORT_PID}" ]; then
+    kill "${PORT_PID}" \
+      >/dev/null 2>&1 || true
+
+    sleep 1
+  fi
+
+  "${PYTHON}" \
+    scripts/locust_metrics_exporter.py \
+    --results-root "${ROOT}/results" \
+    --scenario "${CANONICAL_SCENARIO}" \
+    --port 9271 \
+    >/tmp/demo-agent-perf-locust-exporter.log \
+    2>&1 &
+
+  EXPORTER_PID="$!"
+  EXPORTER_STARTED="true"
+
+  EXPORTER_READY="false"
+
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    if curl -fsS http://localhost:9271/metrics >/dev/null 2>&1; then
+      EXPORTER_READY="true"
+      break
+    fi
+
+    sleep 0.2
+  done
+
+  if [ "${EXPORTER_READY}" != "true" ]; then
+    echo "ERROR: Locust metrics exporter did not become ready on port 9271." >&2
+    exit 2
+  fi
+fi
 
 PERF_REQUESTED_SCENARIO="${REQUESTED_SCENARIO:-}" \
 "${PYTHON}" \

@@ -58,6 +58,31 @@ def parse_scenario(
     )
 
 
+def execution_directory_activity_mtime(
+    path: Path,
+) -> float:
+    latest = 0.0
+
+    try:
+        latest = path.stat().st_mtime
+    except OSError:
+        return latest
+
+    for child in path.rglob("*"):
+        if not child.is_file():
+            continue
+
+        try:
+            latest = max(
+                latest,
+                child.stat().st_mtime,
+            )
+        except OSError:
+            continue
+
+    return latest
+
+
 def candidate_result_dirs(
     scenario: str,
 ) -> list[Path]:
@@ -80,8 +105,13 @@ def candidate_result_dirs(
             path.resolve()
         )
 
+    # Result directories can be reused (Locust) or newly created
+    # (JMeter). Directory mtime alone is therefore not a reliable
+    # execution identity. Rank by the most recent activity inside
+    # the directory so the pointer follows the engine that actually
+    # produced files during the just-completed execution.
     candidates.sort(
-        key=lambda item: item.stat().st_mtime,
+        key=execution_directory_activity_mtime,
         reverse=True,
     )
 
@@ -124,6 +154,19 @@ def write_execution(
         result_dir
     )
 
+    execution_id = None
+    metadata_path = result_dir / "metadata.json"
+
+    if metadata_path.is_file():
+        try:
+            metadata = json.loads(
+                metadata_path.read_text(encoding="utf-8")
+            )
+            if isinstance(metadata, dict):
+                execution_id = metadata.get("execution_id")
+        except (OSError, json.JSONDecodeError):
+            execution_id = None
+
     payload = {
         "scenario": scenario,
         "engine": engine,
@@ -136,6 +179,9 @@ def write_execution(
             ).isoformat()
         ),
     }
+
+    if execution_id:
+        payload["execution_id"] = str(execution_id)
 
     STATE_ROOT.mkdir(
         parents=True,
@@ -180,13 +226,131 @@ def report_matches_scenario(
     return scenario in text
 
 
+def report_matches_execution_id(
+    directory: Path,
+    execution_id: str | None,
+) -> bool:
+    if not execution_id:
+        return True
+
+    metadata_path = directory / "report-metadata.json"
+
+    if not metadata_path.is_file():
+        return False
+
+    try:
+        payload = json.loads(
+            metadata_path.read_text(encoding="utf-8")
+        )
+    except (OSError, json.JSONDecodeError):
+        return False
+
+    if not isinstance(payload, dict):
+        return False
+
+    return str(payload.get("execution_id") or "") == execution_id
+
+
 def resolve_report(
     scenario: str,
 ) -> Path | None:
     if not REPORTS_ROOT.is_dir():
         return None
 
+    # First resolve the report deterministically from the
+    # execution result identity.
+    #
+    # JMeter:
+    #   results/<timestamp>_<scenario>
+    #   reports/<timestamp>_<scenario>
+    #
+    # Locust:
+    #   results/locust-<scenario>
+    #   reports/locust-<scenario>
+    #
+    # Do not select another engine's report merely because
+    # its directory mtime is newer.
+    if EXECUTION_POINTER.is_file():
+        try:
+            execution = json.loads(
+                EXECUTION_POINTER.read_text(
+                    encoding="utf-8"
+                )
+            )
+        except (
+            OSError,
+            json.JSONDecodeError,
+        ):
+            execution = {}
+
+        if isinstance(
+            execution,
+            dict,
+        ):
+            execution_scenario = str(
+                execution.get(
+                    "scenario",
+                    "",
+                )
+                or ""
+            ).strip()
+
+            results_value = str(
+                execution.get(
+                    "results",
+                    "",
+                )
+                or ""
+            ).strip()
+
+            execution_id = str(
+                execution.get(
+                    "execution_id",
+                    "",
+                )
+                or ""
+            ).strip() or None
+
+            if (
+                execution_scenario == scenario
+                and results_value
+            ):
+                result_name = Path(
+                    results_value
+                ).name
+
+                preferred = (
+                    REPORTS_ROOT
+                    / result_name
+                )
+
+                if (
+                    preferred.is_dir()
+                    and (
+                        preferred
+                        / "executive-report.html"
+                    ).is_file()
+                    and report_matches_execution_id(
+                        preferred,
+                        execution_id,
+                    )
+                ):
+                    return preferred.resolve()
+
     candidates = []
+    current_execution_id = None
+
+    if EXECUTION_POINTER.is_file():
+        try:
+            current_execution = json.loads(
+                EXECUTION_POINTER.read_text(encoding="utf-8")
+            )
+            if isinstance(current_execution, dict):
+                current_execution_id = str(
+                    current_execution.get("execution_id") or ""
+                ).strip() or None
+        except (OSError, json.JSONDecodeError):
+            current_execution_id = None
 
     for directory in REPORTS_ROOT.iterdir():
         if not directory.is_dir():
@@ -198,9 +362,15 @@ def resolve_report(
         ).is_file():
             continue
 
-        if report_matches_scenario(
-            directory,
-            scenario,
+        if (
+            report_matches_scenario(
+                directory,
+                scenario,
+            )
+            and report_matches_execution_id(
+                directory,
+                current_execution_id,
+            )
         ):
             candidates.append(
                 directory.resolve()

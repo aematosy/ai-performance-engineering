@@ -23,6 +23,41 @@ def scenario_name_from_model(
         )
     )
 
+    executable_requests = payload.get(
+        "requests"
+    )
+
+    scenario_candidate = payload.get(
+        "scenario_candidate"
+    )
+
+    if (
+        isinstance(
+            executable_requests,
+            list,
+        )
+        and executable_requests
+        and isinstance(
+            scenario_candidate,
+            dict,
+        )
+    ):
+        canonical = (
+            model_path
+            .resolve()
+            .parent
+            .name
+            .strip()
+        )
+
+        if not canonical:
+            raise EngineArtifactError(
+                "Executable model has no canonical "
+                "scenario directory."
+            )
+
+        return canonical
+
     scenarios = payload.get(
         "scenarios",
         []
@@ -152,12 +187,26 @@ def prepare_engine_artifact(
         output=artifact,
     )
 
+    validation_context: dict[str, Any] = {
+        "profile": str(profile_path),
+    }
+
+    governed_plan = (
+        root
+        / "tests"
+        / "plans"
+        / scenario
+        / "test-plan.yaml"
+    ).resolve()
+
+    if governed_plan.is_file():
+        validation_context["plan"] = str(
+            governed_plan
+        )
+
     engine.validate(
         generated,
-        {
-            "profile":
-                str(profile_path),
-        },
+        validation_context,
     )
 
     return {

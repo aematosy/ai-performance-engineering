@@ -34,8 +34,9 @@
       },
       "targets": [
         {
-          "expr": "locust_requests_per_second",
-          "refId": "A"
+          "expr": "locust_requests_per_second or on() vector(0)",
+          "refId": "A",
+          "instant": true
         }
       ],
       "title": "Current Throughput",
@@ -61,8 +62,9 @@
       "id": 2,
       "targets": [
         {
-          "expr": "locust_response_time_p95_ms",
-          "refId": "A"
+          "expr": "locust_response_time_p95_ms or on() vector(0)",
+          "refId": "A",
+          "instant": true
         }
       ],
       "title": "Current p95",
@@ -88,8 +90,9 @@
       "id": 3,
       "targets": [
         {
-          "expr": "locust_error_rate_pct",
-          "refId": "A"
+          "expr": "locust_error_rate_pct or on() vector(0)",
+          "refId": "A",
+          "instant": true
         }
       ],
       "title": "Error Rate",
@@ -109,8 +112,9 @@
       "id": 4,
       "targets": [
         {
-          "expr": "locust_active_users",
-          "refId": "A"
+          "expr": "locust_active_users or on() vector(0)",
+          "refId": "A",
+          "instant": true
         }
       ],
       "title": "Active Virtual Users",
@@ -148,8 +152,9 @@
       "id": 5,
       "targets": [
         {
-          "expr": "locust_metrics_up",
-          "refId": "A"
+          "expr": "locust_metrics_up or on() vector(0)",
+          "refId": "A",
+          "instant": true
         }
       ],
       "title": "Locust Metrics",
@@ -175,8 +180,8 @@
       "id": 6,
       "targets": [
         {
-          "expr": "locust_requests_per_second",
-          "legendFormat": "POST /products/add",
+          "expr": "locust_sampler_requests_per_second",
+          "legendFormat": "{{method}} {{name}}",
           "refId": "A"
         }
       ],
@@ -263,8 +268,8 @@
       "id": 9,
       "targets": [
         {
-          "expr": "locust_failures_per_second",
-          "legendFormat": "failures/s",
+          "expr": "locust_sampler_failures_per_second",
+          "legendFormat": "{{method}} {{name}}",
           "refId": "A"
         }
       ],

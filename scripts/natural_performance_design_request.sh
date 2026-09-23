@@ -186,8 +186,35 @@ if [ -n "${COLLECTION}" ]; then
     exit 2
   fi
 
+  SECRET_COMMAND=(
+    poetry run python
+    scripts/materialize_postman_runtime_properties.py
+    --collection
+    "${COLLECTION}"
+    --manifest
+    "${MANIFEST}"
+  )
+
+  if [ -n "${ENVIRONMENT}" ]; then
+    SECRET_COMMAND+=(
+      --environment
+      "${ENVIRONMENT}"
+    )
+  fi
+
+  "${SECRET_COMMAND[@]}"
+
+  CONTRACT_COMMAND=(
+    poetry run python
+    scripts/resolve_postman_response_contract.py
+    --manifest
+    "${MANIFEST}"
+  )
+
+  "${CONTRACT_COMMAND[@]}"
+
   DESIGN_STATE="$(
-    "${PYTHON:-python3}" - "${MANIFEST}" <<'PYJSON'
+    poetry run python - "${MANIFEST}" <<'PYJSON'
 import json
 import sys
 from pathlib import Path

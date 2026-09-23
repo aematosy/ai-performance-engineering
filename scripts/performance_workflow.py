@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import subprocess
@@ -24,6 +25,9 @@ if str(_PROJECT_SRC) not in sys.path:
     )
 
 
+from performance_engineering.reporting.report_context import (
+    resolve_report_target,
+)
 from performance_engineering.application.engine_artifact import (
     EngineArtifactError,
     prepare_engine_artifact,
@@ -1315,50 +1319,56 @@ def resolve_plan_scenario(
     )
 
 
+def execution_directory_activity_mtime(
+    path: Path,
+) -> float:
+    latest = 0.0
+
+    try:
+        latest = path.stat().st_mtime
+    except OSError:
+        return latest
+
+    for child in path.rglob("*"):
+        if not child.is_file():
+            continue
+
+        try:
+            latest = max(
+                latest,
+                child.stat().st_mtime,
+            )
+        except OSError:
+            continue
+
+    return latest
+
+
 def detect_new_execution_directory(
     *,
     project_root: Path,
     before: set[Path],
     started_at: float,
     scenario: str,
+    engine_name: str,
 ) -> Path | None:
-    """Resolve the execution directory created by the just-finished run.
-
-    Primary strategy is directory set-difference. A conservative timestamp
-    fallback is used only when no new path is visible, for example when a
-    filesystem observer races with the process exit.
     """
-    after = execution_directories(
-        project_root
+    Resolve only the result identity belonging to the
+    engine that just executed.
+
+    JMeter:
+        results/<timestamp>_<scenario>
+
+    Locust:
+        results/locust-<scenario>
+    """
+    engine = (
+        str(
+            engine_name
+        )
+        .strip()
+        .lower()
     )
-
-    created = [
-        path
-        for path in after - before
-        if path.is_dir()
-    ]
-
-    if created:
-        matching = [
-            path
-            for path in created
-            if path.name.endswith(
-                f"_{scenario}"
-            )
-        ]
-
-        candidates = (
-            matching
-            if matching
-            else created
-        )
-
-        return max(
-            candidates,
-            key=lambda path: (
-                path.stat().st_mtime
-            ),
-        )
 
     results_dir = (
         project_root
@@ -1368,36 +1378,242 @@ def detect_new_execution_directory(
     if not results_dir.is_dir():
         return None
 
-    fallback = []
+    if engine == "locust":
+        candidate = (
+            results_dir
+            / f"locust-{scenario}"
+        ).resolve()
 
-    for path in results_dir.iterdir():
-        if not path.is_dir():
-            continue
+        if not candidate.is_dir():
+            return None
 
-        if not path.name.endswith(
-            f"_{scenario}"
-        ):
-            continue
-
-        try:
-            modified = (
-                path.stat().st_mtime
+        activity = (
+            execution_directory_activity_mtime(
+                candidate
             )
-        except OSError:
-            continue
+        )
 
-        if modified >= started_at - 2.0:
-            fallback.append(path.resolve())
+        if activity < (
+            started_at
+            - 2.0
+        ):
+            return None
 
-    if not fallback:
-        return None
+        return candidate
 
-    return max(
-        fallback,
-        key=lambda path: (
-            path.stat().st_mtime
-        ),
+    if engine == "jmeter":
+        after = execution_directories(
+            project_root
+        )
+
+        created = [
+            candidate
+            for candidate in (
+                after - before
+            )
+            if (
+                candidate.is_dir()
+                and candidate.name.endswith(
+                    f"_{scenario}"
+                )
+            )
+        ]
+
+        if created:
+            return max(
+                created,
+                key=execution_directory_activity_mtime,
+            )
+
+        candidates = []
+
+        for candidate in results_dir.iterdir():
+            if not candidate.is_dir():
+                continue
+
+            if not candidate.name.endswith(
+                f"_{scenario}"
+            ):
+                continue
+
+            activity = (
+                execution_directory_activity_mtime(
+                    candidate
+                )
+            )
+
+            if activity >= (
+                started_at
+                - 2.0
+            ):
+                candidates.append(
+                    candidate.resolve()
+                )
+
+        if not candidates:
+            return None
+
+        return max(
+            candidates,
+            key=execution_directory_activity_mtime,
+        )
+
+    raise WorkflowError(
+        "Unsupported execution engine for "
+        f"result detection: {engine_name!r}"
     )
+
+
+def _report_sha256(
+    path: Path,
+) -> str:
+    digest = hashlib.sha256()
+
+    with path.open("rb") as handle:
+        for chunk in iter(
+            lambda: handle.read(1024 * 1024),
+            b"",
+        ):
+            digest.update(chunk)
+
+    return digest.hexdigest()
+
+
+def write_jmeter_report_metadata(
+    *,
+    scenario: str,
+    execution_dir: Path,
+    report_dir: Path,
+) -> Path:
+    """Bind a JMeter report to exactly one governed execution."""
+
+    execution_metadata_path = (
+        execution_dir
+        / "metadata.json"
+    )
+
+    if not execution_metadata_path.is_file():
+        raise WorkflowError(
+            "JMeter execution metadata not found: "
+            f"{execution_metadata_path}"
+        )
+
+    try:
+        execution_metadata = json.loads(
+            execution_metadata_path.read_text(
+                encoding="utf-8"
+            )
+        )
+    except (
+        OSError,
+        json.JSONDecodeError,
+    ) as exc:
+        raise WorkflowError(
+            "Unable to read JMeter execution metadata: "
+            f"{exc}"
+        ) from exc
+
+    if not isinstance(
+        execution_metadata,
+        dict,
+    ):
+        raise WorkflowError(
+            "JMeter execution metadata must be a JSON object."
+        )
+
+    execution_id = str(
+        execution_metadata.get(
+            "execution_id",
+            "",
+        )
+        or ""
+    ).strip()
+
+    if not execution_id:
+        # JMeter execution directories are immutable/timestamped.
+        # The directory identity is therefore the canonical fallback.
+        execution_id = execution_dir.name
+
+    source_stats = (
+        execution_dir
+        / "results.jtl"
+    )
+    analysis = (
+        execution_dir
+        / "analysis.json"
+    )
+    report = (
+        report_dir
+        / "executive-report.html"
+    )
+
+    required = {
+        "JTL": source_stats,
+        "analysis": analysis,
+        "HTML report": report,
+    }
+
+    missing = [
+        f"{label}: {artifact}"
+        for label, artifact in required.items()
+        if not artifact.is_file()
+    ]
+
+    if missing:
+        raise WorkflowError(
+            "Cannot create JMeter report provenance; "
+            "required artifacts are missing: "
+            + "; ".join(missing)
+        )
+
+    payload = {
+        "execution_id": execution_id,
+        "scenario": scenario,
+        "engine": "JMETER",
+        "results": str(
+            execution_dir.resolve()
+        ),
+        "source_stats": str(
+            source_stats.resolve()
+        ),
+        "source_stats_sha256": (
+            _report_sha256(
+                source_stats
+            )
+        ),
+        "analysis": str(
+            analysis.resolve()
+        ),
+        "analysis_sha256": (
+            _report_sha256(
+                analysis
+            )
+        ),
+        "report": str(
+            report.resolve()
+        ),
+        "report_sha256": (
+            _report_sha256(
+                report
+            )
+        ),
+    }
+
+    metadata_path = (
+        report_dir
+        / "report-metadata.json"
+    )
+
+    metadata_path.write_text(
+        json.dumps(
+            payload,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    return metadata_path
 
 
 def professional_reporting_enabled() -> bool:
@@ -1507,6 +1723,11 @@ def generate_professional_report_bundle(
         exist_ok=True,
     )
 
+    report_target = resolve_report_target(
+        project_root=project_root,
+        scenario=scenario,
+    )
+
     command = [
         sys.executable,
         str(builder),
@@ -1526,8 +1747,12 @@ def generate_professional_report_bundle(
         str(report_dir),
         "--scenario",
         scenario,
+        "--target",
+        report_target,
         "--html-report",
         str(artifacts["html"]),
+        "--engine",
+        "JMETER",
     ]
 
     print()
@@ -1609,6 +1834,36 @@ def generate_professional_report_bundle(
             "Execution result is unchanged."
         )
 
+    # JMETER_REPORT_PROVENANCE_V2
+    #
+    # The professional bundle must be execution-bound before
+    # finalize_execution_state.py is allowed to expose it through
+    # last-report.json.
+    try:
+        metadata_path = (
+            write_jmeter_report_metadata(
+                scenario=scenario,
+                execution_dir=execution_dir,
+                report_dir=report_dir,
+            )
+        )
+
+        print(
+            f"{'report-metadata.json':<24}: "
+            f"{metadata_path}"
+        )
+    except WorkflowError as exc:
+        print(
+            "Warning: unable to bind report provenance: "
+            f"{exc}"
+        )
+        print(
+            "The report will not become the current report "
+            "until provenance is valid."
+        )
+        print("=" * 78)
+        return False
+
     print("=" * 78)
     return pdf.is_file()
 
@@ -1625,6 +1880,7 @@ def run_select_engine(
     selected = select_engine(
         profile_path=profile,
         requested_engine=args.engine,
+        allow_change=args.allow_change,
     )
 
     describe_selection(
@@ -1881,6 +2137,17 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
 
+    select_engine_parser.add_argument(
+        "--allow-change",
+        action="store_true",
+        help=(
+            "Explicitly authorize changing an engine "
+            "already persisted in the execution profile. "
+            "The changed profile invalidates any previous "
+            "preflight for subsequent execution."
+        ),
+    )
+
     prepare = subparsers.add_parser(
         "prepare",
         help=(
@@ -2079,9 +2346,11 @@ def main() -> int:
                         ROOT
                     )
                 )
+
                 execute_started_at = (
                     time.time()
                 )
+
                 scenario = (
                     resolve_plan_scenario(
                         require_file(
@@ -2092,6 +2361,32 @@ def main() -> int:
                         )
                     )
                 )
+
+                execution_artifact = require_file(
+                    resolve_path(
+                        args.artifact
+                    ),
+                    "Engine artifact",
+                )
+
+                artifact_suffix = (
+                    execution_artifact
+                    .suffix
+                    .lower()
+                )
+
+                if artifact_suffix == ".jmx":
+                    execution_engine = "jmeter"
+
+                elif artifact_suffix == ".py":
+                    execution_engine = "locust"
+
+                else:
+                    raise WorkflowError(
+                        "Unable to resolve execution "
+                        "engine from artifact: "
+                        f"{execution_artifact}"
+                    )
             else:
                 before_results = set()
                 execute_started_at = 0.0
@@ -2108,6 +2403,7 @@ def main() -> int:
                         before=before_results,
                         started_at=execute_started_at,
                         scenario=scenario,
+                        engine_name=execution_engine,
                     )
                 )
 
@@ -2152,6 +2448,37 @@ def main() -> int:
                             execution_dir=execution_dir,
                         )
                     else:
+                        locust_report_command = [
+                            sys.executable,
+                            "-m",
+                            "performance_engineering.reporting.locust_reporting",
+                            "--results",
+                            str(execution_dir),
+                            "--scenario",
+                            scenario,
+                        ]
+
+                        report_env = dict(os.environ)
+                        existing_pythonpath = report_env.get(
+                            "PYTHONPATH",
+                            "",
+                        )
+                        report_env["PYTHONPATH"] = (
+                            str(ROOT / "src")
+                            + (
+                                os.pathsep + existing_pythonpath
+                                if existing_pythonpath
+                                else ""
+                            )
+                        )
+
+                        report_completed = subprocess.run(
+                            locust_report_command,
+                            cwd=ROOT,
+                            env=report_env,
+                            check=False,
+                        )
+
                         analysis = (
                             execution_dir
                             / "analysis.json"
@@ -2173,6 +2500,14 @@ def main() -> int:
                         print(
                             "Engine artifact : "
                             f"{artifact.name}"
+                        )
+                        print(
+                            "Report generation: "
+                            + (
+                                "COMPLETE"
+                                if report_completed.returncode == 0
+                                else f"FAILED ({report_completed.returncode})"
+                            )
                         )
 
                         if analysis.is_file():

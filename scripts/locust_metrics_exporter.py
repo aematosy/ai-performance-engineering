@@ -32,6 +32,7 @@ class LocustMetrics:
         self.lock = threading.Lock()
 
         self.finished = False
+        self.sampler_values: dict[tuple[str, str], dict[str, float]] = {}
 
         self.values = {
             "locust_metrics_up": 1.0,
@@ -115,13 +116,13 @@ class LocustMetrics:
 
         return 0.0
 
-    def _load_latest_row(
+    def _load_latest_rows(
         self,
-    ) -> dict[str, str] | None:
+    ) -> list[dict[str, str]]:
         path = self.history_file
 
         if not self._history_is_current():
-            return None
+            return []
 
         try:
             with path.open(
@@ -138,30 +139,94 @@ class LocustMetrics:
             OSError,
             csv.Error,
         ):
-            return None
+            return []
 
         if not rows:
-            return None
+            return []
 
-        aggregated = [
+        latest_timestamp = str(
+            rows[-1].get(
+                "Timestamp",
+                "",
+            )
+        ).strip()
+
+        if not latest_timestamp:
+            return [rows[-1]]
+
+        return [
             row
             for row in rows
             if str(
                 row.get(
-                    "Name",
-                    ""
+                    "Timestamp",
+                    "",
                 )
-            ).strip()
-            in (
-                "",
-                "Aggregated",
-            )
+            ).strip() == latest_timestamp
         ]
 
-        if aggregated:
-            return aggregated[-1]
+    @staticmethod
+    def _aggregated_row(
+        rows: list[dict[str, str]],
+    ) -> dict[str, str] | None:
+        for row in reversed(rows):
+            if str(
+                row.get(
+                    "Name",
+                    "",
+                )
+            ).strip() in (
+                "",
+                "Aggregated",
+            ):
+                return row
 
-        return rows[-1]
+        return rows[-1] if rows else None
+
+    def _samplers_from_rows(
+        self,
+        rows: list[dict[str, str]],
+    ) -> dict[tuple[str, str], dict[str, float]]:
+        samplers: dict[tuple[str, str], dict[str, float]] = {}
+
+        for row in rows:
+            name = str(
+                row.get(
+                    "Name",
+                    "",
+                )
+            ).strip()
+
+            method = str(
+                row.get(
+                    "Type",
+                    "",
+                )
+            ).strip()
+
+            if not name or name == "Aggregated":
+                continue
+
+            samplers[(method, name)] = {
+                "requests_per_second": self._number(
+                    row,
+                    "Requests/s",
+                ),
+                "failures_per_second": self._number(
+                    row,
+                    "Failures/s",
+                ),
+                "total_requests": self._number(
+                    row,
+                    "Total Request Count",
+                ),
+                "total_failures": self._number(
+                    row,
+                    "Total Failure Count",
+                ),
+            }
+
+        return samplers
 
     def _reset_runtime_values(
         self,
@@ -189,16 +254,25 @@ class LocustMetrics:
         with self.lock:
             if self.finished:
                 self._reset_runtime_values()
+                self.sampler_values = {}
                 return
 
-        row = (
-            self._load_latest_row()
+        rows = self._load_latest_rows()
+        row = self._aggregated_row(
+            rows
         )
 
         with self.lock:
             if row is None:
                 self._reset_runtime_values()
+                self.sampler_values = {}
                 return
+
+            self.sampler_values = (
+                self._samplers_from_rows(
+                    rows
+                )
+            )
 
             requests = self._number(
                 row,
@@ -300,6 +374,9 @@ class LocustMetrics:
             values = dict(
                 self.values
             )
+            sampler_values = dict(
+                self.sampler_values
+            )
 
         lines = []
 
@@ -310,6 +387,60 @@ class LocustMetrics:
             lines.append(
                 f"{name} {value}"
             )
+
+
+        if sampler_values:
+            lines.append(
+                "# TYPE locust_sampler_requests_per_second gauge"
+            )
+            for (method, name), metrics in sorted(
+                sampler_values.items()
+            ):
+                escaped_method = method.replace(
+                    "\\", "\\\\"
+                ).replace(
+                    '"', '\\"'
+                )
+                escaped_name = name.replace(
+                    "\\", "\\\\"
+                ).replace(
+                    '"', '\\"'
+                )
+                labels = (
+                    f'method="{escaped_method}",'
+                    f'name="{escaped_name}"'
+                )
+                lines.append(
+                    "locust_sampler_requests_per_second"
+                    f"{{{labels}}} "
+                    f"{metrics['requests_per_second']}"
+                )
+
+            lines.append(
+                "# TYPE locust_sampler_failures_per_second gauge"
+            )
+            for (method, name), metrics in sorted(
+                sampler_values.items()
+            ):
+                escaped_method = method.replace(
+                    "\\", "\\\\"
+                ).replace(
+                    '"', '\\"'
+                )
+                escaped_name = name.replace(
+                    "\\", "\\\\"
+                ).replace(
+                    '"', '\\"'
+                )
+                labels = (
+                    f'method="{escaped_method}",'
+                    f'name="{escaped_name}"'
+                )
+                lines.append(
+                    "locust_sampler_failures_per_second"
+                    f"{{{labels}}} "
+                    f"{metrics['failures_per_second']}"
+                )
 
         return (
             "\n".join(

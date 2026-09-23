@@ -197,7 +197,20 @@ def main() -> int:
                         "/",
                     )
                 ),
-                "expected_status": 200,
+                "expected_status": (
+                    request.get(
+                        "expected_status"
+                    )
+                    if request.get(
+                        "expected_status"
+                    )
+                    not in (
+                        None,
+                        "",
+                        [],
+                    )
+                    else "UNRESOLVED"
+                ),
             }
         )
 
@@ -341,11 +354,18 @@ def main() -> int:
         "assertions": [
             {
                 "type": "RESPONSE_CODE",
-                "expected_value": "200",
+                "transaction": transaction["name"],
+                "expected_value": str(
+                    transaction["expected_status"]
+                ),
                 "description": (
-                    "Validate successful HTTP response."
+                    "Validate expected HTTP response for "
+                    + transaction["name"]
+                    + "."
                 ),
             }
+            for transaction in transactions
+            if transaction["expected_status"] != "UNRESOLVED"
         ],
         "observability": {
             "metrics": [

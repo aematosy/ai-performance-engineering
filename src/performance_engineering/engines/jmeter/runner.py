@@ -158,6 +158,45 @@ def require_path(
 
 def build_context(config: ConfigLoader) -> RuntimeContext:
     jmeter_value = config.get_command("jmeter_command", required=True)
+
+    jmeter_command = split_command(
+        jmeter_value,
+        "runtime.jmeter_command",
+    )
+
+    runtime_properties_value = os.getenv(
+        "PERF_JMETER_PROPERTIES_FILE",
+        "",
+    ).strip()
+
+    if runtime_properties_value:
+        runtime_properties = (
+            Path(runtime_properties_value)
+            .expanduser()
+            .resolve()
+        )
+
+        if not runtime_properties.is_file():
+            raise PipelineError(
+                "JMeter runtime properties file "
+                "does not exist: "
+                f"{runtime_properties}"
+            )
+
+        jmeter_command.extend(
+            [
+                "-q",
+                str(runtime_properties),
+            ]
+        )
+
+        print(
+            "JMeter runtime properties : CONFIGURED"
+        )
+        print(
+            f"Properties file           : {runtime_properties}"
+        )
+
     docker_value = config.get_command("docker_command", required=True)
     compose_value = config.get_command("docker_compose_command", required=True)
 
@@ -182,10 +221,7 @@ def build_context(config: ConfigLoader) -> RuntimeContext:
 
     return RuntimeContext(
         config=config,
-        jmeter_command=split_command(
-            jmeter_value,
-            "runtime.jmeter_command",
-        ),
+        jmeter_command=jmeter_command,
         docker_command=split_command(
             docker_value,
             "runtime.docker_command",

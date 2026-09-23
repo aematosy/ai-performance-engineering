@@ -48,6 +48,35 @@ def read_json(
     return payload
 
 
+def _report_matches_execution(
+    directory: Path,
+    execution: dict,
+) -> bool:
+    execution_id = str(
+        execution.get("execution_id") or ""
+    ).strip()
+
+    if not execution_id:
+        return True
+
+    metadata_path = directory / "report-metadata.json"
+
+    if not metadata_path.is_file():
+        return False
+
+    try:
+        payload = json.loads(
+            metadata_path.read_text(encoding="utf-8")
+        )
+    except (OSError, json.JSONDecodeError):
+        return False
+
+    if not isinstance(payload, dict):
+        return False
+
+    return str(payload.get("execution_id") or "") == execution_id
+
+
 def resolve_report_dir(
     execution: dict,
 ) -> Path:
@@ -72,6 +101,52 @@ def resolve_report_dir(
         raise RuntimeError(
             "No existe reports/."
         )
+
+    # Prefer the report whose directory identity matches
+    # the exact execution result directory.
+    #
+    # This prevents a previous JMeter report from being
+    # selected for a current Locust execution, or vice versa.
+    results_value = str(
+        execution.get(
+            "results",
+            "",
+        )
+        or ""
+    ).strip()
+
+    if results_value:
+        result_name = Path(
+            results_value
+        ).name
+
+        preferred = (
+            reports_root
+            / result_name
+        )
+
+        preferred_html = (
+            preferred
+            / "executive-report.html"
+        )
+
+        preferred_pdf = (
+            preferred
+            / "executive-report.pdf"
+        )
+
+        if (
+            preferred.is_dir()
+            and (
+                preferred_html.is_file()
+                or preferred_pdf.is_file()
+            )
+            and _report_matches_execution(
+                preferred,
+                execution,
+            )
+        ):
+            return preferred.resolve()
 
     candidates = []
 
@@ -118,7 +193,10 @@ def resolve_report_dir(
         if scenario in directory.name:
             matched = True
 
-        if matched:
+        if matched and _report_matches_execution(
+            directory,
+            execution,
+        ):
             candidates.append(
                 directory
             )

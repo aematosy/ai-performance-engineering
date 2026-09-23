@@ -1,3 +1,45 @@
+## EXACT POSTMAN PUBLIC CLI CONTRACT
+
+Esta sección es autoritativa y tiene prioridad sobre cualquier ejemplo anterior.
+
+Para diseño Postman desde Gemini, usar únicamente este front door:
+
+    scripts/natural_performance_design_request.sh
+
+Contrato exacto de argumentos:
+
+    --scenario "<scenario>"
+    --collection "<collection.json>"
+    --environment "<environment.json>"
+    --users <integer>
+    --ramp-time-seconds <integer>
+    --duration-seconds <integer>
+    --pacing-seconds <number>
+
+Ejemplo exacto:
+
+    ./scripts/natural_performance_design_request.sh       --scenario "restful-booker-e2e-demo"       --collection "inputs/postman/restful-booker/RestFull Booker_test.postman_collection.json"       --environment "inputs/postman/restful-booker/Production RestFull.postman_environment.json"       --users 10       --ramp-time-seconds 100       --duration-seconds 180       --pacing-seconds 2
+
+Nombres inválidos que Gemini NO debe usar:
+
+    --duration
+    --ramp-up
+    --ramp-up-seconds
+    --ramp-time
+    --pacing
+    --input-type postman
+
+Reglas:
+
+- No traducir nombres naturales del workload a opciones inventadas.
+- "duración" SIEMPRE se materializa como `--duration-seconds`.
+- "ramp-up" SIEMPRE se materializa como `--ramp-time-seconds`.
+- "pacing" SIEMPRE se materializa como `--pacing-seconds`.
+- Para Postman NO pasar `--input-type`; el wrapper público resuelve el routing.
+- Si el front door devuelve código distinto de 0, detenerse inmediatamente.
+- No reintentar con opciones alternativas.
+- No llamar directamente `natural_performance_design.sh`.
+
 # AI Performance Engineering Platform
 
 ## Language
@@ -40,7 +82,7 @@ User request
 
 Design:
 
-`scripts/natural_performance_design.sh`
+`scripts/natural_performance_design_request.sh`
 
 Execution:
 
@@ -84,7 +126,7 @@ concisely and stop.
 
 For a design request:
 
-1. Use `scripts/natural_performance_design.sh`.
+1. Use `scripts/natural_performance_design_request.sh`.
 2. Do not inspect the script first.
 3. Do not call `--help`.
 4. Do not execute load.
@@ -156,6 +198,12 @@ Before engine selection, keep the workflow engine-neutral.
 Do not mention or generate JMX merely because JMeter exists.
 
 Do not mention Locust-specific implementation details before Locust is selected.
+
+
+For Postman design, do not describe the design as ready for approval while any selected
+transaction has `expected_status: UNRESOLVED`. The public design front door owns any
+engine-neutral functional contract discovery needed to close that gap. A single functional
+E2E traversal is validation, not performance load.
 
 ## Final Summary Before Load
 
@@ -303,3 +351,18 @@ The human chooses JMeter or Locust when requested.
 The human confirms actual load with RUN.
 
 <!-- NATURAL_EXECUTION_HANDOFF_END -->
+
+## Execution completion policy
+
+After the public performance execution workflow completes successfully:
+
+- stop orchestration immediately;
+- do not activate `performance-results-analyst` automatically;
+- do not re-read execution artifacts;
+- do not inspect `analysis.json`, `metadata.json`, JTL, CSV, logs or reports;
+- do not perform post-execution investigation unless explicitly requested.
+
+Return a concise execution summary from the workflow output and end the turn.
+
+Use `performance-results-analyst` only when the user explicitly requests
+analysis, interpretation, comparison or diagnosis of an existing execution.

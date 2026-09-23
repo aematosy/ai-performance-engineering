@@ -54,6 +54,22 @@ class NaturalExecutionFinalizerSemanticsTests(
             self.text,
         )
 
+    def test_locust_exporter_uses_canonical_scenario_and_only_locust(
+        self,
+    ):
+        self.assertIn(
+            'if [ "${ENGINE}" = "locust" ]; then',
+            self.text,
+        )
+        self.assertIn(
+            '--scenario "${CANONICAL_SCENARIO}"',
+            self.text,
+        )
+        self.assertNotIn(
+            '--scenario "${SCENARIO}" \\n  --port 9271',
+            self.text,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

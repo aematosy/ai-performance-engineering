@@ -103,7 +103,7 @@ class LocustDashboardUXTests(
         }
 
         self.assertIn(
-            "locust_metrics_up",
+            "locust_metrics_up or on() vector(0)",
             expressions,
         )
 

@@ -1,15 +1,24 @@
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 import sys
+import time
+from datetime import datetime, timezone
 from pathlib import Path
+from uuid import uuid4
 from typing import Any
 from urllib.parse import urlparse
+from urllib.request import urlopen
 
 import yaml
 
 from performance_engineering.domain.engine import PerformanceEngine
+
+from performance_engineering.engines.locust.postman_generator import (
+    generate_postman_locust,
+)
 
 
 class LocustEngine(PerformanceEngine):
@@ -21,6 +30,71 @@ class LocustEngine(PerformanceEngine):
     @property
     def name(self) -> str:
         return "locust"
+
+    @staticmethod
+    def _wait_for_metrics_exporter(
+        process: subprocess.Popen,
+        timeout_seconds: float = 10.0,
+    ) -> None:
+        deadline = (
+            time.monotonic()
+            + timeout_seconds
+        )
+
+        while time.monotonic() < deadline:
+            if process.poll() is not None:
+                raise RuntimeError(
+                    "Locust metrics exporter terminó "
+                    "antes de quedar disponible."
+                )
+
+            try:
+                with urlopen(
+                    "http://127.0.0.1:9271/metrics",
+                    timeout=1.0,
+                ) as response:
+                    body = response.read().decode(
+                        "utf-8",
+                        errors="replace",
+                    )
+
+                    if (
+                        response.status == 200
+                        and "locust_metrics_up" in body
+                    ):
+                        return
+            except OSError:
+                pass
+
+            time.sleep(0.2)
+
+        raise RuntimeError(
+            "Locust metrics exporter no quedó "
+            "disponible en "
+            "http://localhost:9271/metrics"
+        )
+
+    @staticmethod
+    def _stop_metrics_exporter(
+        process: subprocess.Popen | None,
+    ) -> None:
+        if (
+            process is None
+            or process.poll() is not None
+        ):
+            return
+
+        process.terminate()
+
+        try:
+            process.wait(
+                timeout=5
+            )
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(
+                timeout=5
+            )
 
     @staticmethod
     def _load_json(path: Path) -> dict[str, Any]:
@@ -102,6 +176,39 @@ class LocustEngine(PerformanceEngine):
         normalized = self._load_json(
             model_path
         )
+
+        source = normalized.get(
+            "source",
+            {}
+        )
+
+        source_type = str(
+            source.get(
+                "type",
+                "",
+            )
+            if isinstance(
+                source,
+                dict,
+            )
+            else ""
+        ).upper()
+
+        if (
+            source_type == "POSTMAN"
+            and isinstance(
+                normalized.get(
+                    "requests"
+                ),
+                list,
+            )
+        ):
+            return generate_postman_locust(
+                project_root=self.project_root,
+                model_path=model_path,
+                profile_path=profile_path,
+                output=output,
+            )
 
         profile_payload = yaml.safe_load(
             profile_path.read_text(
@@ -343,9 +450,39 @@ class PerformanceUser(HttpUser):
             else users
         )
 
+        # Locust result directories are intentionally stable by scenario.
+        # Remove artifacts from the previous run before starting so analysis
+        # and reporting can never consume stale CSV/HTML evidence.
+        if execution_dir.is_dir():
+            shutil.rmtree(
+                execution_dir
+            )
+
         execution_dir.mkdir(
             parents=True,
             exist_ok=True,
+        )
+
+        report_dir = (
+            self.project_root
+            / "reports"
+            / execution_dir.name
+        )
+
+        if report_dir.is_dir():
+            shutil.rmtree(
+                report_dir
+            )
+
+        execution_id = (
+            datetime.now(timezone.utc)
+            .strftime("%Y%m%dT%H%M%S.%fZ")
+            + "-"
+            + uuid4().hex[:8]
+        )
+        started_at = (
+            datetime.now(timezone.utc)
+            .isoformat()
         )
 
         csv_prefix = (
@@ -374,17 +511,124 @@ class PerformanceUser(HttpUser):
             "0",
             "--csv",
             str(csv_prefix),
+            "--csv-full-history",
             "--html",
             str(html_report),
         ]
 
-        completed = subprocess.run(
-            command,
-            cwd=self.project_root,
-            check=False,
+        # LOCUST_LIVE_OBSERVABILITY
+        #
+        # The exporter reads Locust's live full-history CSV and
+        # exposes engine-neutral Prometheus metrics on port 9271.
+        scenario = str(
+            context.get(
+                "scenario"
+            )
+            or ""
+        ).strip()
+
+        if not scenario:
+            directory_name = (
+                execution_dir.name
+            )
+
+            if directory_name.startswith(
+                "locust-"
+            ):
+                scenario = directory_name[
+                    len("locust-"):
+                ]
+
+        if not scenario:
+            raise RuntimeError(
+                "No se pudo resolver el scenario "
+                "para la observabilidad Locust."
+            )
+
+        exporter_script = (
+            self.project_root
+            / "scripts"
+            / "locust_metrics_exporter.py"
+        ).resolve()
+
+        if not exporter_script.is_file():
+            raise RuntimeError(
+                "Locust metrics exporter no encontrado: "
+                f"{exporter_script}"
+            )
+
+        exporter_log_path = (
+            execution_dir
+            / "locust-metrics-exporter.log"
         )
 
+        exporter_process = None
+
+        with exporter_log_path.open(
+            "w",
+            encoding="utf-8",
+        ) as exporter_log:
+            try:
+                exporter_process = subprocess.Popen(
+                    [
+                        sys.executable,
+                        str(exporter_script),
+                        "--results-root",
+                        str(
+                            (
+                                self.project_root
+                                / "results"
+                            ).resolve()
+                        ),
+                        "--scenario",
+                        scenario,
+                        "--port",
+                        "9271",
+                    ],
+                    cwd=self.project_root,
+                    stdout=exporter_log,
+                    stderr=subprocess.STDOUT,
+                )
+
+                self._wait_for_metrics_exporter(
+                    exporter_process
+                )
+
+                print()
+                print(
+                    "Locust observability : ACTIVE"
+                )
+                print(
+                    "Metrics              : "
+                    "http://localhost:9271/metrics"
+                )
+                print(
+                    "Grafana              : "
+                    "http://localhost:3000"
+                )
+                print()
+
+                completed = subprocess.run(
+                    command,
+                    cwd=self.project_root,
+                    check=False,
+                )
+
+            finally:
+                self._stop_metrics_exporter(
+                    exporter_process
+                )
+
+                print()
+                print(
+                    "Locust observability : INACTIVE"
+                )
+                print()
+
         metadata = {
+            "execution_id": execution_id,
+            "started_at": started_at,
+            "completed_at": datetime.now(timezone.utc).isoformat(),
             "engine": "locust",
             "artifact": str(
                 artifact.resolve()

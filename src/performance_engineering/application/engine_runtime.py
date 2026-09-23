@@ -123,6 +123,7 @@ def persist_engine_in_profile(
     *,
     profile_path: Path,
     engine_name: str,
+    allow_change: bool = False,
 ) -> Path:
     """
     Persist engine provenance without modifying workload values.
@@ -170,11 +171,26 @@ def persist_engine_in_profile(
         )
 
         if existing_name != name:
-            raise EngineResolutionError(
-                "Execution profile already declares "
-                f"engine={existing_name!r}; "
-                f"requested={name!r}."
+            if not allow_change:
+                raise EngineResolutionError(
+                    "Execution profile already declares "
+                    f"engine={existing_name!r}; "
+                    f"requested={name!r}. "
+                    "An explicit governed engine change is required."
+                )
+
+            payload["engine"] = name
+
+            profile_path.write_text(
+                yaml.safe_dump(
+                    payload,
+                    sort_keys=False,
+                    allow_unicode=True,
+                ),
+                encoding="utf-8",
             )
+
+            return profile_path
 
         return profile_path
 

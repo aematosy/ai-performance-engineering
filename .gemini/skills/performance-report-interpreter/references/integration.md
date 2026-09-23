@@ -32,7 +32,7 @@ Por defecto el enhancer agrega accesos a:
 
 - Grafana: `http://localhost:3000`
 - Prometheus: `http://localhost:9090`
-- Métricas: usa `observability.prometheus_port` del execution profile y construye `http://localhost:<port>/metrics`.
+- Métricas: para JMeter usa `observability.prometheus_port` del execution profile (por defecto 9270); para Locust usa el exporter live dedicado en `http://localhost:9271/metrics`, salvo `--metrics-url` explícito.
 
 Se pueden reemplazar con `--grafana-url`, `--prometheus-url` y `--metrics-url`.
 

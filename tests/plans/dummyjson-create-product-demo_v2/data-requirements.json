@@ -1,0 +1,12 @@
+{
+  "schema_version": "1.0",
+  "scenario": "dummyjson-create-product-demo_v2",
+  "status": "APPROVED",
+  "strategy": "NONE",
+  "fields": [],
+  "secrets": [],
+  "scenario_candidate": {
+    "id": "dummyjson-create-product-demo_v2",
+    "type": "SINGLE_REQUEST"
+  }
+}

@@ -21,7 +21,7 @@ No afirmar capacidad máxima, estabilidad de largo plazo ni ausencia total de de
 
 ## Objetivo
 
-El objetivo visible representa la aplicación/servicio o conjunto de orígenes evaluados, no un sampler individual. Si hay un solo origen HTTP, usar el origen sin path. Si hay varios, describir un flujo multi-servicio.
+`Objetivo` describe qué se valida; `Target` describe dónde se ejecuta. Para una sola transacción, el objetivo puede describir `METHOD path` y el Target puede conservar `METHOD URL`. Para escenarios con varias transacciones, el objetivo describe el escenario/workload y el Target usa el sistema/base URL. Nunca duplicar ambos campos ni convertir `Target` en `Objetivo`.
 
 ## Evidencia
 

@@ -15,7 +15,7 @@ Usar los artefactos determinísticos como fuente de verdad. No reemplazar ni rei
 4. Construir evidencia representativa con `evidence_collector.py`.
 5. Interpretar métricas en español natural con `PerformanceResultInterpreter`.
 6. Generar PDF profesional con `ProfessionalPdfReportGenerator`; conservar la evidencia detallada fuera del PDF ejecutivo.
-7. Mejorar `executive-report.html` con `HtmlReportEnhancer`: españolizar etiquetas, corregir el objetivo general, agregar un único `Exportar PDF` sin solapar controles existentes y mostrar accesos de observabilidad.
+7. Mejorar `executive-report.html` con `HtmlReportEnhancer`: españolizar etiquetas sin alterar la semántica de `Objetivo` y `Target`, agregar un único `Exportar PDF` sin solapar controles existentes y mostrar accesos de observabilidad.
 8. Preferir `PerformanceReportBundleBuilder` para generar todo en una sola operación.
 
 ## Lenguaje para personas no expertas
@@ -108,7 +108,7 @@ El botón `Exportar PDF` debe:
 
 Agregar una sección `Observabilidad en tiempo real` antes del resumen de tiempos con accesos configurables a Grafana, Prometheus y al endpoint de métricas. Indicar que funcionan cuando la stack local está activa.
 
-Españolizar etiquetas visibles comunes del reporte y actualizar la tarjeta `Target/Objetivo` al objetivo general resuelto.
+Españolizar etiquetas visibles comunes del reporte preservando `Objetivo` y `Target` como campos distintos. El enhancer no debe reescribir valores de metadata ya resueltos por el generador.
 
 ## Orden del PDF
 

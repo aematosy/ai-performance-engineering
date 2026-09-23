@@ -112,11 +112,10 @@ def natural_decision(value: str) -> str:
 
 
 def natural_verdict(value: str) -> str:
-    mapping = {
-        "PASS": "Cumple",
-        "FAIL": "No cumple",
-    }
-    return mapping.get(value.upper(), value)
+    normalized = value.upper()
+    if normalized in {"PASS", "FAIL"}:
+        return normalized
+    return value
 
 
 class PerformanceResultInterpreter:
@@ -370,9 +369,13 @@ class PerformanceResultInterpreter:
         m = result.metrics
         verdict_upper = result.verdict.upper()
         if verdict_upper == "PASS":
-            opening = "La prueba cumplió con los criterios de rendimiento definidos para la carga ejecutada."
+            opening = (
+                "El resultado SLA de la prueba fue PASS para la carga ejecutada."
+            )
         elif verdict_upper == "FAIL":
-            opening = "La prueba no cumplió uno o más criterios de rendimiento definidos para la carga ejecutada."
+            opening = (
+                "El resultado SLA de la prueba fue FAIL para la carga ejecutada."
+            )
         else:
             opening = "La ejecución finalizó y requiere revisar los criterios configurados para determinar su resultado."
 
@@ -419,7 +422,11 @@ class PerformanceResultInterpreter:
             else:
                 lines.append(f"Éxito: {m.success_rate:.2f}%. Indica qué proporción de solicitudes cumplió las validaciones configuradas.")
         if m.error_rate is not None:
-            lines.append(f"Errores: {m.error_rate:.2f}%. Este valor se compara contra el SLA permitido para decidir si la prueba cumple.")
+            lines.append(
+                f"Errores: {m.error_rate:.2f}%. "
+                "Este valor se compara contra el SLA permitido para determinar "
+                "el resultado PASS o FAIL."
+            )
         if m.throughput is not None:
             lines.append(f"Ritmo de procesamiento: {m.throughput:.3f} solicitudes por segundo con esta carga. No representa por sí solo la capacidad máxima del sistema.")
         if m.p95_ms is not None:
@@ -441,19 +448,60 @@ class PerformanceResultInterpreter:
     @staticmethod
     def _limitations(result: Interpretation) -> list[str]:
         return [
-            "Un resultado que cumple demuestra que los criterios configurados se alcanzaron con este workload; no demuestra la capacidad máxima del sistema.",
+            "Un resultado SLA PASS demuestra que los criterios configurados se alcanzaron con este workload; no demuestra la capacidad máxima del sistema.",
             "Una prueba de performance no sustituye las pruebas funcionales ni garantiza la ausencia de defectos de negocio.",
             "Una ejecución corta sirve como línea base; para afirmar estabilidad sostenida se requieren pruebas de mayor duración y ejecuciones repetidas.",
         ]
 
     @staticmethod
     def _recommendations(result: Interpretation) -> list[str]:
-        recs = ["Conservar esta ejecución como referencia del workload aprobado y compararla con futuras ejecuciones equivalentes."]
-        if result.verdict.upper() == "PASS":
-            recs.append("Repetir la prueba al menos varias veces antes de usarla como evidencia de estabilidad, especialmente en entornos compartidos o públicos.")
+        recs = [
+            "Conservar esta ejecución como referencia del workload aprobado "
+            "y compararla con futuras ejecuciones equivalentes."
+        ]
+
+        failed = int(result.metrics.failed or 0)
+        verdict = result.verdict.upper()
+
+        if failed > 0:
+            recs.append(
+                "Investigar y resolver las respuestas HTTP con error observadas "
+                "antes de aumentar concurrencia o duración."
+            )
+            recs.append(
+                "Aunque el resultado SLA global sea PASS, la ejecución presenta "
+                "incidencias funcionales que deben entenderse antes de utilizar "
+                "esta baseline como referencia estable."
+            )
+            recs.append(
+                "Repetir la baseline en condiciones equivalentes después de "
+                "resolver o explicar las incidencias observadas."
+            )
+            recs.append(
+                "No aumentar la carga hasta confirmar que los errores observados "
+                "no corresponden a defectos funcionales, problemas de datos, "
+                "correlación, autenticación o comportamiento del servicio."
+            )
+        elif verdict == "PASS":
+            recs.append(
+                "Repetir la prueba varias veces en condiciones equivalentes "
+                "para establecer variabilidad y estabilidad."
+            )
+            recs.append(
+                "Si las ejecuciones repetidas permanecen estables, evaluar una "
+                "prueba escalonada con mayor concurrencia mediante un nuevo plan "
+                "revisado y aprobado."
+            )
         else:
-            recs.append("Revisar primero las transacciones con error y los SLA incumplidos antes de aumentar la carga.")
-        recs.append("Aumentar concurrencia o duración únicamente mediante un nuevo plan revisado y aprobado.")
+            recs.append(
+                "Revisar primero los SLA incumplidos y las transacciones con "
+                "comportamiento degradado antes de aumentar la carga."
+            )
+            recs.append(
+                "Repetir la baseline después de corregir o explicar las causas "
+                "del resultado FAIL."
+            )
+
         return recs
 
 

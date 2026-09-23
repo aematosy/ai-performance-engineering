@@ -5,6 +5,29 @@ import argparse
 import json
 from pathlib import Path
 
+import sys
+
+PROJECT_ROOT = (
+    Path(__file__)
+    .resolve()
+    .parents[4]
+)
+
+SRC_ROOT = (
+    PROJECT_ROOT
+    / "src"
+)
+
+if str(SRC_ROOT) not in sys.path:
+    sys.path.insert(
+        0,
+        str(SRC_ROOT),
+    )
+
+from performance_engineering.reporting.report_context import (
+    resolve_report_scope,
+)
+
 from evidence_collector import collect
 from enhance_html_report import HtmlReportEnhancer
 from generate_professional_pdf import ProfessionalPdfReportGenerator
@@ -30,6 +53,7 @@ class PerformanceReportBundleBuilder:
         grafana_url: str = "http://localhost:3000",
         prometheus_url: str = "http://localhost:9090",
         metrics_url: str | None = None,
+        engine: str | None = None,
     ) -> None:
         self.analysis_path = analysis
         self.intelligence_path = intelligence
@@ -43,6 +67,7 @@ class PerformanceReportBundleBuilder:
         self.grafana_url = grafana_url
         self.prometheus_url = prometheus_url
         self.metrics_url = metrics_url
+        self.engine = str(engine or "").strip().upper()
 
     def build(self) -> dict[str, Path]:
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -60,7 +85,15 @@ class PerformanceReportBundleBuilder:
         intelligence = load_json(self.intelligence_path)
         workload = load_workload(self.workload_path)
         runtime = JtlMetricsAnalyzer(self.jtl_path).analyze()
-        resolved_target = self.target or runtime.get("scope", {}).get("target") or "Aplicación / servicio bajo prueba"
+        report_scope = resolve_report_scope(
+            project_root=PROJECT_ROOT,
+            scenario=self.scenario,
+            explicit_target=(
+                self.target
+                or runtime.get("scope", {}).get("target")
+            ),
+        )
+        resolved_target = report_scope.target
         evidence_dict = evidence.to_dict()
 
         interpretation = PerformanceResultInterpreter(
@@ -81,11 +114,24 @@ class PerformanceReportBundleBuilder:
             runtime_metrics=runtime,
             scenario=self.scenario,
             target=resolved_target,
+            objective=report_scope.objective,
+            system=report_scope.system,
+            scope_label=report_scope.scope_label,
         ).build(pdf_path)
 
         observability = workload.get("observability", {}) if isinstance(workload, dict) else {}
-        port = observability.get("prometheus_port", 9270) if isinstance(observability, dict) else 9270
-        resolved_metrics_url = self.metrics_url or f"http://localhost:{port}/metrics"
+
+        if self.metrics_url:
+            resolved_metrics_url = self.metrics_url
+        elif self.engine == "LOCUST":
+            resolved_metrics_url = "http://localhost:9271/metrics"
+        else:
+            port = (
+                observability.get("prometheus_port", 9270)
+                if isinstance(observability, dict)
+                else 9270
+            )
+            resolved_metrics_url = f"http://localhost:{port}/metrics"
 
         html_enhanced = HtmlReportEnhancer(
             self.html_report,
@@ -119,8 +165,15 @@ def main() -> int:
     parser.add_argument("--html-report", type=Path)
     parser.add_argument("--grafana-url", default="http://localhost:3000")
     parser.add_argument("--prometheus-url", default="http://localhost:9090")
-    parser.add_argument("--metrics-url", help="Endpoint de métricas. Si se omite, se deriva del puerto del execution profile.")
+    parser.add_argument("--metrics-url", help="Endpoint de métricas. Si se omite, se deriva del motor/perfil de ejecución.")
+    parser.add_argument("--engine", choices=("JMETER", "LOCUST"), help="Motor que produjo la ejecución.")
     args = parser.parse_args()
+
+    args.target = resolve_report_scope(
+        project_root=PROJECT_ROOT,
+        scenario=args.scenario,
+        explicit_target=args.target,
+    ).target
 
     outputs = PerformanceReportBundleBuilder(
         analysis=args.analysis,
@@ -135,6 +188,7 @@ def main() -> int:
         grafana_url=args.grafana_url,
         prometheus_url=args.prometheus_url,
         metrics_url=args.metrics_url,
+        engine=args.engine,
     ).build()
     for name, path in outputs.items():
         print(f"{name}: {path}")

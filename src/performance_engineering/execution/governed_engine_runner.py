@@ -8,6 +8,11 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+from performance_engineering.execution.runtime_properties import (
+    RuntimePropertiesError,
+    resolve_jmeter_runtime_properties,
+)
+
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 from typing import Any
 
@@ -823,6 +828,7 @@ def execute_engine(
     profile_path: Path,
     runtime: dict[str, Any],
     execution_dir: Path | None,
+    runtime_properties: Path | None,
 ) -> Path:
     if engine_name == "locust":
         target_dir = (
@@ -845,6 +851,8 @@ def execute_engine(
                     str(profile_path),
                 "execution_dir":
                     str(target_dir),
+                "scenario":
+                    scenario_name(plan),
             },
         )
 
@@ -922,6 +930,12 @@ def execute_engine(
                     (
                         str(execution_dir)
                         if execution_dir
+                        else None
+                    ),
+                "runtime_properties":
+                    (
+                        str(runtime_properties)
+                        if runtime_properties
                         else None
                     ),
             },
@@ -1030,6 +1044,35 @@ def main() -> int:
         profile = load_yaml(
             profile_path
         )
+
+        runtime_properties = None
+
+        if engine_name == "jmeter":
+            runtime_contract = (
+                resolve_jmeter_runtime_properties(
+                    project_root=project_root,
+                    plan_path=plan_path,
+                    plan=plan,
+                )
+            )
+
+            if runtime_contract is not None:
+                runtime_properties = (
+                    runtime_contract.path
+                )
+
+                print()
+                print(
+                    "JMeter runtime properties : VALID"
+                )
+                print(
+                    "Required properties       : "
+                    f"{len(runtime_contract.required_names)}"
+                )
+                print(
+                    "Properties file           : "
+                    f"{runtime_properties}"
+                )
 
         authorization = (
             validate_authorization(
@@ -1200,6 +1243,7 @@ def main() -> int:
             profile_path=profile_path,
             runtime=runtime,
             execution_dir=requested_execution_dir,
+            runtime_properties=runtime_properties,
         )
 
         print()

@@ -62,7 +62,6 @@ class HtmlReportEnhancer:
             "Generated": "Generado",
             "Source": "Fuente",
             "Scenario": "Escenario",
-            "Target": "Objetivo",
             "Average": "Promedio",
             "Min": "Mínimo",
             "Max": "Máximo",
@@ -79,7 +78,6 @@ class HtmlReportEnhancer:
             "Recommendations": "Recomendaciones",
         }
         translations_json = json.dumps(translations, ensure_ascii=False)
-        target_json = json.dumps(self.target, ensure_ascii=False)
         links_json = json.dumps(
             {
                 "grafana": self.grafana_url,
@@ -143,7 +141,6 @@ body.dark .{self.OBS_CLASS} .perf-obs-link {{ background:rgba(15,23,42,.58); }}
 <script id="{self.MARKER}-script">
 (function() {{
   const translations = {translations_json};
-  const desiredTarget = {target_json};
   const links = {links_json};
   function normalize(s) {{ return (s || '').replace(/\\s+/g,' ').trim(); }}
   function translateTextNodes() {{
@@ -154,20 +151,6 @@ body.dark .{self.OBS_CLASS} .perf-obs-link {{ background:rgba(15,23,42,.58); }}
       const key = normalize(node.nodeValue);
       if (translations[key]) node.nodeValue = node.nodeValue.replace(key, translations[key]);
     }});
-  }}
-  function updateTargetCard() {{
-    if (!desiredTarget) return;
-    const all = Array.from(document.querySelectorAll('body *'));
-    const label = all.find(el => {{
-      const t = normalize(el.textContent).toUpperCase();
-      return t === 'TARGET' || t === 'OBJETIVO';
-    }});
-    if (!label) return;
-    const card = label.parentElement;
-    if (!card) return;
-    const children = Array.from(card.children);
-    const valueNode = children.find(el => el !== label && normalize(el.textContent));
-    if (valueNode) valueNode.textContent = desiredTarget;
   }}
   function observabilitySection() {{
     if (document.querySelector('.{self.OBS_CLASS}')) return;
@@ -229,7 +212,6 @@ body.dark .{self.OBS_CLASS} .perf-obs-link {{ background:rgba(15,23,42,.58); }}
   function run() {{
     cleanupExportButtons();
     translateTextNodes();
-    updateTargetCard();
     observabilitySection();
   }}
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);

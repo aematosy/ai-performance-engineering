@@ -57,7 +57,7 @@ class LocustObservabilityAlignmentTests(
         )
 
         self.assertIn(
-            '--scenario "${SCENARIO}"',
+            '--scenario "${CANONICAL_SCENARIO}"',
             text,
         )
 

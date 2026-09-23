@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+import json
 from typing import Any
 
 from reportlab.lib import colors
@@ -49,6 +50,23 @@ SURFACE = colors.HexColor("#F8FAFC")
 WHITE = colors.white
 
 
+
+# HISTORY_TREND_BINDING_V1
+def _load_sibling_trend(analysis_path: Path) -> dict:
+    path = Path(analysis_path).resolve().parent / "trend.json"
+    if not path.is_file():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    if not isinstance(payload, dict):
+        return {}
+    if not payload.get("previous_execution_id") or not payload.get("current_execution_id"):
+        return {}
+    return payload
+
+
 class ProfessionalPdfReportGenerator:
     """Genera un PDF ejecutivo, visual y genérico para pruebas HTTP web/API."""
 
@@ -62,6 +80,9 @@ class ProfessionalPdfReportGenerator:
         runtime_metrics: dict[str, Any],
         scenario: str,
         target: str,
+        objective: str | None = None,
+        system: str | None = None,
+        scope_label: str | None = None,
     ) -> None:
         self.analysis = analysis
         self.intelligence = intelligence
@@ -70,6 +91,9 @@ class ProfessionalPdfReportGenerator:
         self.runtime_metrics = runtime_metrics
         self.scenario = scenario
         self.target = target
+        self.objective = objective or "Validar el comportamiento de performance del escenario evaluado."
+        self.system = system or "Not specified"
+        self.scope_label = scope_label or "Not specified"
         self.result = PerformanceResultInterpreter(
             analysis, intelligence, evidence, workload, runtime_metrics
         ).build()
@@ -244,9 +268,9 @@ class ProfessionalPdfReportGenerator:
         workload_text = " durante ".join(workload_bits) if len(workload_bits) == 2 else ", ".join(workload_bits)
 
         if verdict_pass:
-            observed = "El sistema cumplió los criterios de rendimiento definidos"
+            observed = "El resultado SLA fue PASS"
         else:
-            observed = "El sistema no cumplió todos los criterios de rendimiento definidos"
+            observed = "El resultado SLA fue FAIL"
         if workload_text:
             observed += f" bajo la carga evaluada de {workload_text}"
         if m.failed == 0 and m.requests is not None:
@@ -268,15 +292,26 @@ class ProfessionalPdfReportGenerator:
             meaning = meaning[0].upper() + meaning[1:] + ". "
         meaning += "Estos resultados describen este nivel de carga; no representan por sí solos la capacidad máxima del sistema."
 
-        if verdict_pass:
+        if (m.failed or 0) > 0:
             next_step = (
-                "Usar esta ejecución como línea base y repetirla en condiciones equivalentes para confirmar estabilidad. "
-                "Si se necesita evaluar escalabilidad o capacidad, ejecutar después una prueba escalonada con mayor concurrencia mediante un nuevo plan aprobado."
+                "Investigar primero las respuestas HTTP con error observadas y "
+                "determinar su causa. Aunque el resultado SLA global sea PASS, "
+                "la ejecución presenta incidencias funcionales. Repetir la baseline "
+                "después de resolver o explicar esas incidencias y no aumentar la "
+                "carga hasta confirmar estabilidad."
+            )
+        elif verdict_pass:
+            next_step = (
+                "Usar esta ejecución como línea base y repetirla en condiciones "
+                "equivalentes para confirmar estabilidad. Si las ejecuciones "
+                "repetidas permanecen estables, evaluar después una prueba "
+                "escalonada mediante un nuevo plan aprobado."
             )
         else:
             next_step = (
-                "Revisar primero las transacciones con error y los criterios incumplidos. "
-                "No aumentar la carga hasta entender la causa y repetir la línea base."
+                "Revisar primero las transacciones con comportamiento degradado "
+                "y los criterios SLA en FAIL. No aumentar la carga hasta entender "
+                "la causa y repetir la línea base."
             )
         return observed, meaning, next_step
 
@@ -301,6 +336,10 @@ class ProfessionalPdfReportGenerator:
         return table
 
     def build(self, output: Path) -> Path:
+        analysis_path_raw = self.analysis.get("_analysis_path") if isinstance(self.analysis, dict) else None
+        sibling_trend = _load_sibling_trend(Path(analysis_path_raw)) if analysis_path_raw else {}
+        if sibling_trend:
+            self.analysis["_history_trend"] = sibling_trend
         output.parent.mkdir(parents=True, exist_ok=True)
         doc = SimpleDocTemplate(
             str(output),
@@ -314,6 +353,162 @@ class ProfessionalPdfReportGenerator:
         )
         story: list[Any] = []
         m = self.result.metrics
+
+        # HISTORICAL_PDF_V1
+        historical_comparison = {
+            "available": False,
+            "message": (
+                "No hay ejecuciones previas comparables para este escenario "
+                "y motor. Esta ejecución se establece como referencia inicial."
+            ),
+        }
+
+        analysis_source = str(
+            (
+                self.analysis
+                if isinstance(self.analysis, dict)
+                else {}
+            ).get("source")
+            or ""
+        ).strip()
+
+        if analysis_source:
+            results_dir = Path(
+                analysis_source
+            ).resolve().parent
+            trend_path = results_dir / "trend.json"
+            history_path = (
+                Path(__file__).resolve().parents[4]
+                / "history"
+                / "history.json"
+            )
+
+            try:
+                trend = (
+                    json.loads(
+                        trend_path.read_text(
+                            encoding="utf-8"
+                        )
+                    )
+                    if trend_path.is_file()
+                    else {}
+                )
+            except (OSError, json.JSONDecodeError):
+                trend = {}
+
+            bound_trend = self.analysis.get("_history_trend") or {}
+            if bound_trend:
+                previous_id = bound_trend.get("previous_execution_id")
+                current_id = bound_trend.get("current_execution_id")
+            previous_id = str(
+                trend.get(
+                    "previous_execution_id"
+                )
+                or ""
+            ).strip()
+            current_id = str(
+                trend.get(
+                    "current_execution_id"
+                )
+                or ""
+            ).strip()
+
+            def iter_dicts(value):
+                if isinstance(value, dict):
+                    yield value
+                    for child in value.values():
+                        yield from iter_dicts(child)
+                elif isinstance(value, list):
+                    for child in value:
+                        yield from iter_dicts(child)
+
+            def history_engine(execution_id):
+                if not history_path.is_file():
+                    return ""
+                try:
+                    history = json.loads(
+                        history_path.read_text(
+                            encoding="utf-8"
+                        )
+                    )
+                except (OSError, json.JSONDecodeError):
+                    return ""
+
+                for item in iter_dicts(history):
+                    candidate = str(
+                        item.get("execution_id")
+                        or item.get("id")
+                        or ""
+                    ).strip()
+                    if candidate == execution_id:
+                        return str(
+                            item.get("engine")
+                            or item.get(
+                                "metadata",
+                                {},
+                            ).get("engine")
+                            or ""
+                        ).strip().upper()
+                return ""
+
+            current_engine = str(
+                self.analysis.get("engine")
+                or ""
+            ).strip().upper()
+
+            previous_engine = history_engine(
+                previous_id
+            )
+            history_current_engine = history_engine(
+                current_id
+            )
+
+            if history_current_engine:
+                current_engine = history_current_engine
+
+            trend_scenario = str(
+                trend.get("scenario") or ""
+            ).upper()
+
+            same_engine = False
+
+            if "::LOCUST::" in trend_scenario:
+                same_engine = current_engine == "LOCUST"
+            else:
+                same_engine = bool(
+                    previous_engine
+                    and previous_engine == current_engine
+                )
+
+            if (
+                previous_id
+                and current_id
+                and current_engine
+                and same_engine
+                and isinstance(
+                    trend.get("metrics"),
+                    dict,
+                )
+            ):
+                historical_comparison = {
+                    "available": True,
+                    "previous_execution_id": previous_id,
+                    "current_execution_id": current_id,
+                    "classification": str(
+                        trend.get("classification")
+                        or "N/A"
+                    ).upper(),
+                    "score": trend.get("score"),
+                    "summary": str(
+                        trend.get("summary")
+                        or ""
+                    ),
+                    "metrics": trend.get(
+                        "metrics",
+                        {},
+                    ),
+                    "engine": current_engine,
+                }
         w = self.result.workload
         verdict_pass = self.result.verdict.upper() == "PASS"
         verdict_color = GREEN if verdict_pass else RED
@@ -332,7 +527,10 @@ class ProfessionalPdfReportGenerator:
 
         hero_meta = self._table([
             ["Escenario", self.scenario],
-            ["Objetivo evaluado", self.target],
+            ["Objetivo", self.objective],
+            ["Sistema", self.system],
+            ["Target", self.target],
+            ["Alcance", self.scope_label],
         ], [35 * mm, 130 * mm])
         hero_meta.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (0, -1), PALE_INDIGO),
@@ -342,25 +540,67 @@ class ProfessionalPdfReportGenerator:
         story.append(Spacer(1, 7))
 
         conclusion_text = "Baseline" if verdict_pass else "Requiere revisión"
+
+        failed_requests = int(m.failed or 0)
+        total_requests = int(m.requests or 0)
+        error_rate = float(m.error_rate or 0.0)
+
+        if failed_requests > 0:
+            execution_error_text = (
+                f"{failed_requests} de {total_requests} ({error_rate:.2f}%)"
+            )
+            functional_status = "Con incidencias"
+        else:
+            execution_error_text = (
+                f"0 de {total_requests} (0.00%)"
+            )
+            functional_status = "Sin incidencias"
+
         status_cards = Table([
             [
-                Paragraph("RESULTADO", self.styles["card_label"]),
-                Paragraph("RIESGO TÉCNICO", self.styles["card_label"]),
+                Paragraph("RESULTADO SLA", self.styles["card_label"]),
+                Paragraph("ERRORES DE EJECUCIÓN", self.styles["card_label"]),
+                Paragraph("ESTADO FUNCIONAL", self.styles["card_label"]),
                 Paragraph("CLASIFICACIÓN", self.styles["card_label"]),
             ],
             [
-                Paragraph(natural_verdict(self.result.verdict), self.styles["card_value"]),
-                Paragraph(natural_risk(self.result.risk), self.styles["card_value"]),
-                Paragraph(conclusion_text, self.styles["card_value"]),
+                Paragraph(
+                    natural_verdict(self.result.verdict),
+                    self.styles["card_value"],
+                ),
+                Paragraph(
+                    execution_error_text,
+                    self.styles["card_value"],
+                ),
+                Paragraph(
+                    functional_status,
+                    self.styles["card_value"],
+                ),
+                Paragraph(
+                    conclusion_text,
+                    self.styles["card_value"],
+                ),
             ],
-        ], colWidths=[55 * mm] * 3, hAlign="CENTER")
+        ], colWidths=[41.25 * mm] * 4, hAlign="CENTER")
         status_cards.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (0, -1), verdict_fill),
-            ("BACKGROUND", (1, 0), (1, -1), PALE_BLUE),
-            ("BACKGROUND", (2, 0), (2, -1), PALE_INDIGO),
+            (
+                "BACKGROUND",
+                (1, 0),
+                (1, -1),
+                PALE_RED if failed_requests > 0 else PALE_GREEN,
+            ),
+            (
+                "BACKGROUND",
+                (2, 0),
+                (2, -1),
+                PALE_AMBER if failed_requests > 0 else PALE_GREEN,
+            ),
+            ("BACKGROUND", (3, 0), (3, -1), PALE_INDIGO),
             ("BOX", (0, 0), (0, -1), 0.6, BORDER),
             ("BOX", (1, 0), (1, -1), 0.6, BORDER),
             ("BOX", (2, 0), (2, -1), 0.6, BORDER),
+            ("BOX", (3, 0), (3, -1), 0.6, BORDER),
             ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
             ("ALIGN", (0, 0), (-1, -1), "CENTER"),
             ("TOPPADDING", (0, 0), (-1, 0), 7),
@@ -456,7 +696,11 @@ class ProfessionalPdfReportGenerator:
             story.append(Paragraph("Desglose por transacción / servicio", self.styles["section"]))
             rows = [["Transacción / servicio", "Muestras", "Éxito", "Promedio", "p95", "p99", "Estado"]]
             for item in self.result.transactions:
-                status_text = "Cumple" if item.status.upper() == "PASS" else "Con errores"
+                status_text = (
+                    "PASS"
+                    if item.status.upper() == "PASS"
+                    else "CON ERRORES"
+                )
                 rows.append([
                     item.label,
                     str(item.samples),
@@ -471,6 +715,148 @@ class ProfessionalPdfReportGenerator:
                 [48 * mm, 16 * mm, 19 * mm, 22 * mm, 20 * mm, 20 * mm, 20 * mm],
                 header=True,
             ))
+
+        story.append(
+            Paragraph(
+                "Comparación histórica",
+                self.styles["section"],
+            )
+        )
+
+        if historical_comparison.get("available"):
+            rows = [
+                [
+                    "Métrica",
+                    "Anterior",
+                    "Actual",
+                    "Cambio",
+                    "Estado",
+                ]
+            ]
+
+            definitions = [
+                (
+                    "Throughput",
+                    "throughput_req_per_sec",
+                    " req/s",
+                ),
+                ("p95", "p95_ms", " ms"),
+                ("p99", "p99_ms", " ms"),
+                (
+                    "Error rate",
+                    "error_rate_pct",
+                    " %",
+                ),
+            ]
+
+            for label, key, suffix in definitions:
+                item = historical_comparison[
+                    "metrics"
+                ].get(
+                    key,
+                    {},
+                )
+
+                previous = item.get("previous")
+                current = item.get("current")
+                change = item.get(
+                    "percentage_change"
+                )
+                status = str(
+                    item.get("status")
+                    or "N/A"
+                ).upper()
+
+                def metric_value(value):
+                    if value is None:
+                        return "N/A"
+                    try:
+                        return (
+                            f"{float(value):.2f}"
+                            f"{suffix}"
+                        )
+                    except (TypeError, ValueError):
+                        return (
+                            f"{value}"
+                            f"{suffix}"
+                        )
+
+                if change is None:
+                    change_text = "N/A"
+                else:
+                    number = float(change)
+                    change_text = (
+                        ("+" if number > 0 else "")
+                        + f"{number:.2f}%"
+                    )
+
+                rows.append(
+                    [
+                        label,
+                        metric_value(previous),
+                        metric_value(current),
+                        change_text,
+                        status,
+                    ]
+                )
+
+            story.append(
+                Paragraph(
+                    (
+                        "<b>Anterior:</b> "
+                        f"{historical_comparison['previous_execution_id']}<br/>"
+                        "<b>Actual:</b> "
+                        f"{historical_comparison['current_execution_id']}<br/>"
+                        "<b>Motor:</b> "
+                        f"{historical_comparison['engine']}<br/>"
+                        "<b>Tendencia general:</b> "
+                        f"{historical_comparison['classification']}<br/>"
+                        "<b>Score:</b> "
+                        f"{historical_comparison['score']}"
+                    ),
+                    self.styles["small"],
+                )
+            )
+            story.append(Spacer(1, 4))
+            story.append(
+                self._table(
+                    rows,
+                    [
+                        33 * mm,
+                        33 * mm,
+                        33 * mm,
+                        28 * mm,
+                        30 * mm,
+                    ],
+                    header=True,
+                )
+            )
+            story.append(Spacer(1, 4))
+
+            if historical_comparison.get("summary"):
+                story.append(
+                    self._callout(
+                        "Lectura",
+                        historical_comparison["summary"],
+                        fill=PALE_BLUE,
+                        accent=BLUE,
+                    )
+                )
+        else:
+            story.append(
+                self._callout(
+                    "Referencia inicial",
+                    historical_comparison.get(
+                        "message",
+                        (
+                            "No hay ejecuciones previas "
+                            "comparables."
+                        ),
+                    ),
+                    fill=PALE_INDIGO,
+                    accent=INDIGO,
+                )
+            )
 
         story.append(Paragraph("Conclusiones y consideraciones", self.styles["section"]))
         limitations_text = "<br/>".join(f"• {item}" for item in self.result.limitations) or "Sin limitaciones adicionales registradas."
@@ -539,6 +925,7 @@ def main() -> int:
         scenario=args.scenario,
         target=target,
     )
+analysis["_analysis_path"] = str(Path(args.analysis).resolve())
     print(generator.build(args.output))
     return 0
 

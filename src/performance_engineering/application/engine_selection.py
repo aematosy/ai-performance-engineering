@@ -142,6 +142,7 @@ def select_engine(
     *,
     profile_path: Path,
     requested_engine: str | None,
+    allow_change: bool = False,
 ) -> str:
     profile_path = (
         profile_path
@@ -168,6 +169,7 @@ def select_engine(
         persist_engine_in_profile(
             profile_path=profile_path,
             engine_name=selected,
+            allow_change=allow_change,
         )
     except EngineResolutionError as exc:
         raise EngineSelectionError(

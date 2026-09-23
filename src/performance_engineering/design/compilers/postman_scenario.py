@@ -419,6 +419,60 @@ def normalize_header(
     }
 
 
+def expected_status_from_postman_item(
+    item: dict[str, Any],
+) -> int | None:
+    """Resolve an explicit HTTP status contract declared by Postman.
+
+    Sources, in precedence-neutral agreement:
+    - pm.response.to.have.status(NNN) assertions in item events;
+    - saved Postman response examples with a numeric `code`.
+
+    Multiple distinct status codes are ambiguous and fail closed.
+    """
+    statuses: set[int] = set()
+    status_re = re.compile(
+        r"pm\.response\.to\.have\.status\(\s*(\d{3})\s*\)",
+        re.I,
+    )
+
+    for event in item.get("event", []) or []:
+        if not isinstance(event, dict):
+            continue
+        script = event.get("script")
+        if not isinstance(script, dict):
+            continue
+        raw_exec = script.get("exec", [])
+        lines = (
+            [raw_exec]
+            if isinstance(raw_exec, str)
+            else [str(value) for value in raw_exec]
+            if isinstance(raw_exec, list)
+            else []
+        )
+        for value in status_re.findall("\n".join(lines)):
+            statuses.add(int(value))
+
+    for response in item.get("response", []) or []:
+        if not isinstance(response, dict):
+            continue
+        code = response.get("code")
+        if isinstance(code, int) and 100 <= code <= 599:
+            statuses.add(code)
+        elif isinstance(code, str) and code.strip().isdigit():
+            parsed = int(code.strip())
+            if 100 <= parsed <= 599:
+                statuses.add(parsed)
+
+    if len(statuses) > 1:
+        raise CompileError(
+            "Ambiguous Postman HTTP status contract for "
+            f"{item.get('name', '<unnamed>')}: {sorted(statuses)}"
+        )
+
+    return next(iter(statuses), None)
+
+
 def request_url_string(
     request: dict[str, Any],
 ) -> str:
@@ -642,24 +696,35 @@ def compile_scenario(
                 }
             )
 
+        compiled_request = {
+            "id": request_id,
+            "method": str(
+                request.get(
+                    "method",
+                    "GET",
+                )
+            ).upper(),
+            "protocol": split.scheme,
+            "host": split.hostname,
+            "port": split.port,
+            "path": path,
+            "query": query,
+            "headers": headers,
+            "json_body": body_obj,
+            "extractors": extractors,
+        }
+
+        expected_status = expected_status_from_postman_item(
+            item
+        )
+
+        if expected_status is not None:
+            compiled_request[
+                "expected_status"
+            ] = expected_status
+
         compiled_requests.append(
-            {
-                "id": request_id,
-                "method": str(
-                    request.get(
-                        "method",
-                        "GET",
-                    )
-                ).upper(),
-                "protocol": split.scheme,
-                "host": split.hostname,
-                "port": split.port,
-                "path": path,
-                "query": query,
-                "headers": headers,
-                "json_body": body_obj,
-                "extractors": extractors,
-            }
+            compiled_request
         )
 
     return {

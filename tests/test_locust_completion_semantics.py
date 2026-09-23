@@ -102,7 +102,7 @@ class LocustCompletionSemanticsTests(
         )
 
         self.assertIn(
-            '"expr": "locust_metrics_up"',
+            '"expr": "locust_metrics_up or on() vector(0)"',
             text,
         )
 

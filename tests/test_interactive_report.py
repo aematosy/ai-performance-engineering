@@ -49,7 +49,7 @@ class InteractiveReportContractTests(
 
     def test_all_transactions_is_supported(self):
         self.assertIn(
-            "All Transactions",
+            "Todas las transacciones",
             self.source,
         )
 

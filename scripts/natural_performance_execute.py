@@ -9,6 +9,11 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+
+from performance_engineering.execution.runtime_properties import (
+    RuntimePropertiesError,
+    resolve_jmeter_runtime_properties,
+)
 from typing import Any
 
 import yaml
@@ -460,6 +465,62 @@ def main() -> int:
         / "normalized-performance-model.json"
     )
 
+    if not model.is_file():
+        design_manifest = (
+            workspace
+            / "design-manifest.json"
+        )
+
+        if design_manifest.is_file():
+            try:
+                design_payload = json.loads(
+                    design_manifest.read_text(
+                        encoding="utf-8"
+                    )
+                )
+            except (
+                OSError,
+                json.JSONDecodeError,
+            ) as exc:
+                raise NaturalExecutionError(
+                    "No se pudo leer el design manifest: "
+                    f"{design_manifest}: {exc}"
+                ) from exc
+
+            artifacts = (
+                design_payload.get(
+                    "artifacts"
+                )
+                or {}
+            )
+
+            executable_model = str(
+                artifacts.get(
+                    "executable_model",
+                    "",
+                )
+                or ""
+            ).strip()
+
+            if executable_model:
+                candidate_model = Path(
+                    executable_model
+                ).expanduser()
+
+                if not candidate_model.is_absolute():
+                    candidate_model = (
+                        ROOT
+                        / candidate_model
+                    )
+
+                candidate_model = (
+                    candidate_model
+                    .resolve()
+                )
+
+                if candidate_model.is_file():
+                    model = candidate_model
+
     manifest = (
         ROOT
         / "results"
@@ -587,6 +648,34 @@ def main() -> int:
         scenario,
         engine,
     )
+
+    if engine == "jmeter":
+        runtime_contract = (
+            resolve_jmeter_runtime_properties(
+                project_root=ROOT,
+                plan_path=plan,
+            )
+        )
+
+        if runtime_contract is None:
+            print()
+            print(
+                "[OK] JMeter runtime properties: "
+                "NOT REQUIRED"
+            )
+
+        else:
+            print()
+            print(
+                "[OK] JMeter runtime properties: VALID"
+            )
+            print(
+                "[OK] Required properties: "
+                f"{len(runtime_contract.required_names)}"
+            )
+            print(
+                "[OK] Secret values: NOT DISPLAYED"
+            )
 
     ready = manifest_is_current(
         manifest,
@@ -824,8 +913,8 @@ if __name__ == "__main__":
             file=sys.stderr,
         )
         print(
-            "No se inició una nueva carga "
-            "después del error.",
+            "La ejecución se detuvo por el error reportado. "
+            "No se iniciarán acciones posteriores automáticamente.",
             file=sys.stderr,
         )
         raise SystemExit(2)

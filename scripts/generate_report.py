@@ -23,6 +23,37 @@ from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 
+from performance_engineering.reporting.report_context import (
+    format_percentage,
+    resolve_report_scope,
+)
+
+
+
+def normalize_report_percentage_precision(
+    content: str,
+) -> str:
+    """Render every visible percentage with exactly two decimals."""
+    import re
+
+    pattern = re.compile(
+        r"(?<![0-9.])"
+        r"([0-9]+(?:\.[0-9]+)?)"
+        r"%"
+    )
+
+    def replace(match):
+        value = float(
+            match.group(1)
+        )
+
+        return f"{value:.2f}%"
+
+    return pattern.sub(
+        replace,
+        content,
+    )
+
 
 def load_timeseries(jtl_path, bucket_seconds=1):
     buckets_rt = defaultdict(list)
@@ -476,10 +507,25 @@ def build_recommendations(analysis):
     metrics = analysis["metrics"]
     recommendations = []
 
-    if metrics["error_rate_pct"] > 0:
+    error_count = int(
+        metrics.get(
+            "error_count",
+            0,
+        )
+        or 0
+    )
+    error_rate = float(
+        metrics.get(
+            "error_rate_pct",
+            0.0,
+        )
+        or 0.0
+    )
+
+    if error_count > 0:
         recommendations.append(
-            "Revisar los códigos de respuesta y etiquetas "
-            "con errores antes de aumentar la carga."
+            "Investigar y resolver los códigos de respuesta y "
+            "transacciones con error antes de aumentar la carga."
         )
 
     if metrics["response_time_ms"]["p95"] is not None:
@@ -503,17 +549,219 @@ def build_recommendations(analysis):
             )
 
     if analysis["verdict"] == "PASS":
+        if error_count > 0:
+            recommendations.append(
+                "El resultado SLA global es PASS, pero la ejecución "
+                f"presenta {error_count} solicitudes con error "
+                f"({error_rate:.2f}%)."
+            )
+            recommendations.append(
+                "Repetir la baseline después de resolver o explicar "
+                "las incidencias observadas."
+            )
+            recommendations.append(
+                "No aumentar concurrencia o duración hasta confirmar "
+                "que los errores no corresponden a defectos funcionales, "
+                "problemas de datos, correlación, autenticación o "
+                "comportamiento del servicio."
+            )
+        else:
+            recommendations.append(
+                "El resultado SLA global es PASS. Repetir la baseline "
+                "varias veces para establecer variabilidad y estabilidad."
+            )
+            recommendations.append(
+                "Si las ejecuciones repetidas permanecen estables, "
+                "evaluar una prueba escalonada con mayor concurrencia "
+                "mediante un nuevo plan aprobado."
+            )
+    else:
         recommendations.append(
-            "El escenario cumple los SLA configurados. "
-            "Ejecutar una prueba escalonada con mayor concurrencia."
-        )
-
-        recommendations.append(
-            "Repetir la línea base varias veces para establecer "
-            "variabilidad y estabilidad."
+            "El resultado SLA global es FAIL. Revisar los criterios "
+            "incumplidos antes de aumentar la carga."
         )
 
     return recommendations
+
+
+
+# HISTORICAL_REPORT_V1
+def _load_historical_comparison(
+    *,
+    analysis_path: Path,
+    current_engine: str,
+) -> dict:
+    result = {
+        "available": False,
+        "message": (
+            "No hay ejecuciones previas comparables para este escenario "
+            "y motor. Esta ejecución se establece como referencia inicial."
+        ),
+    }
+
+    results_dir = analysis_path.resolve().parent
+    trend_path = results_dir / "trend.json"
+    if not trend_path.is_file():
+        return result
+
+    try:
+        trend = json.loads(
+            trend_path.read_text(encoding="utf-8")
+        )
+    except (OSError, json.JSONDecodeError):
+        return result
+
+    previous_id = str(
+        trend.get("previous_execution_id") or ""
+    ).strip()
+    current_id = str(
+        trend.get("current_execution_id") or ""
+    ).strip()
+
+    if not previous_id or not current_id:
+        return result
+
+    history_path = (
+        Path(__file__).resolve().parents[1]
+        / "history"
+        / "history.json"
+    )
+
+    def iter_dicts(value):
+        if isinstance(value, dict):
+            yield value
+            for child in value.values():
+                yield from iter_dicts(child)
+        elif isinstance(value, list):
+            for child in value:
+                yield from iter_dicts(child)
+
+    def execution_engine(payload, execution_id):
+        if not history_path.is_file():
+            return ""
+        try:
+            history = json.loads(
+                history_path.read_text(encoding="utf-8")
+            )
+        except (OSError, json.JSONDecodeError):
+            return ""
+
+        for item in iter_dicts(history):
+            candidate = str(
+                item.get("execution_id")
+                or item.get("id")
+                or ""
+            ).strip()
+            if candidate != execution_id:
+                continue
+            return str(
+                item.get("engine")
+                or item.get("metadata", {}).get("engine")
+                or ""
+            ).strip().upper()
+        return ""
+
+    expected_engine = str(
+        current_engine or ""
+    ).strip().upper()
+
+    previous_engine = execution_engine(
+        {},
+        previous_id,
+    )
+    current_history_engine = execution_engine(
+        {},
+        current_id,
+    )
+
+    if current_history_engine:
+        expected_engine = current_history_engine
+
+    if not expected_engine:
+        return result
+
+    trend_scenario = str(
+        trend.get("scenario") or ""
+    ).upper()
+
+    # Locust usa una clave histórica SAME-ENGINE explícita:
+    # <scenario>::LOCUST::users=...::ramp=...::duration=...::target=...
+    # Si esa clave está presente, la propia identidad del trend demuestra
+    # que previous/current pertenecen al bucket Locust comparable.
+    if "::LOCUST::" in trend_scenario:
+        if expected_engine != "LOCUST":
+            return result
+    else:
+        # Para históricos sin clave explícita (por ejemplo JMeter legacy),
+        # conservar la validación existente por engine histórico.
+        if not previous_engine:
+            return result
+        if previous_engine != expected_engine:
+            return result
+
+    metrics = trend.get("metrics")
+    if not isinstance(metrics, dict):
+        return result
+
+    return {
+        "available": True,
+        "previous_execution_id": previous_id,
+        "current_execution_id": current_id,
+        "classification": str(
+            trend.get("classification") or "N/A"
+        ).strip().upper(),
+        "score": trend.get("score"),
+        "summary": str(
+            trend.get("summary") or ""
+        ).strip(),
+        "metrics": metrics,
+        "engine": expected_engine,
+    }
+
+
+def _history_row(
+    label: str,
+    payload: dict,
+    unit: str,
+) -> str:
+    previous = payload.get("previous")
+    current = payload.get("current")
+    change = payload.get("percentage_change")
+    status = str(
+        payload.get("status") or "N/A"
+    ).upper()
+
+    def value_text(value):
+        if value is None:
+            return "N/A"
+        try:
+            return f"{float(value):.2f}"
+        except (TypeError, ValueError):
+            return str(value)
+
+    if change is None:
+        change_text = "N/A"
+    else:
+        number = float(change)
+        change_text = (
+            ("+" if number > 0 else "")
+            + f"{number:.2f}%"
+        )
+
+    css = {
+        "IMPROVED": "status-pass",
+        "DEGRADED": "status-fail",
+    }.get(status, "")
+
+    return (
+        "<tr>"
+        f"<td>{html.escape(label)}</td>"
+        f"<td>{html.escape(value_text(previous) + unit)}</td>"
+        f"<td>{html.escape(value_text(current) + unit)}</td>"
+        f"<td>{html.escape(change_text)}</td>"
+        f'<td class="{css}">{html.escape(status)}</td>'
+        "</tr>"
+    )
 
 
 def build_html(
@@ -523,7 +771,11 @@ def build_html(
     throughput_series,
     error_rate_series,
     scenario,
+    objective,
+    system,
     target,
+    scope_label,
+    historical_comparison,
 ):
     metrics = analysis["metrics"]
     verdict = analysis["verdict"]
@@ -583,6 +835,143 @@ def build_html(
         "verdict-pass"
         if verdict == "PASS"
         else "verdict-fail"
+    )
+
+    error_count = int(
+        metrics.get(
+            "error_count",
+            0,
+        )
+        or 0
+    )
+    error_rate = float(
+        metrics.get(
+            "error_rate_pct",
+            0.0,
+        )
+        or 0.0
+    )
+
+    functional_status = (
+        "Con incidencias"
+        if error_count > 0
+        else "Sin incidencias"
+    )
+
+    classification = (
+        "Baseline"
+        if verdict == "PASS"
+        else "Requiere revisión"
+    )
+
+    # FINAL_KPI_CLEANUP_V2
+    sla_state_class = (
+        "pe-status-pass"
+        if verdict == "PASS"
+        else "pe-status-fail"
+    )
+
+    failed_state_class = (
+        "pe-status-fail"
+        if error_count > 0
+        else "pe-status-pass"
+    )
+
+    engine_label = str(
+        analysis.get(
+            "engine",
+            "",
+        )
+        or analysis.get(
+            "metadata",
+            {},
+        ).get(
+            "engine",
+            "",
+        )
+        or ""
+    ).strip().upper()
+
+    if not engine_label:
+        source_hint = " ".join(
+            str(value or "").lower()
+            for value in (
+                analysis.get("source"),
+                analysis.get("source_file"),
+                analysis.get("input_file"),
+            )
+        )
+
+        if "locust" in source_hint:
+            engine_label = "LOCUST"
+        elif (
+            "jmeter" in source_hint
+            or ".jtl" in source_hint
+        ):
+            engine_label = "JMETER"
+
+    if not engine_label:
+        engine_label = "N/A"
+
+    p90_value = float(
+        metrics.get(
+            "response_time_ms",
+            {},
+        ).get(
+            "p90",
+            0.0,
+        )
+        or 0.0
+    )
+
+    # FINAL_EXECUTION_DASHBOARD_V1
+    total_requests = int(
+        metrics.get(
+            "total_requests",
+            0,
+        )
+        or 0
+    )
+
+    success_count = int(
+        metrics.get(
+            "success_count",
+            max(
+                total_requests - error_count,
+                0,
+            ),
+        )
+        or 0
+    )
+
+    average_latency = float(
+        metrics.get(
+            "response_time_ms",
+            {},
+        ).get(
+            "avg",
+            0.0,
+        )
+        or 0.0
+    )
+
+    maximum_latency = float(
+        metrics.get(
+            "response_time_ms",
+            {},
+        ).get(
+            "max",
+            0.0,
+        )
+        or 0.0
+    )
+
+    transaction_count = len(
+        metrics.get(
+            "transactions",
+            [],
+        )
+        or []
     )
 
     response_time_chart = svg_line_chart(
@@ -676,6 +1065,140 @@ def build_html(
     generated_at = datetime.now().strftime(
         "%Y-%m-%d %H:%M:%S"
     )
+
+    if historical_comparison.get("available"):
+        history_rows = "".join(
+            [
+                _history_row(
+                    "Throughput",
+                    historical_comparison["metrics"].get(
+                        "throughput_req_per_sec",
+                        {},
+                    ),
+                    " req/s",
+                ),
+                _history_row(
+                    "p95",
+                    historical_comparison["metrics"].get(
+                        "p95_ms",
+                        {},
+                    ),
+                    " ms",
+                ),
+                _history_row(
+                    "p99",
+                    historical_comparison["metrics"].get(
+                        "p99_ms",
+                        {},
+                    ),
+                    " ms",
+                ),
+                _history_row(
+                    "Error rate",
+                    historical_comparison["metrics"].get(
+                        "error_rate_pct",
+                        {},
+                    ),
+                    " %",
+                ),
+            ]
+        )
+
+        score = historical_comparison.get("score")
+        score_text = (
+            "N/A"
+            if score is None
+            else format_metric(score, decimals=1)
+        )
+
+        historical_comparison_html = (
+            '<section class="panel pe-history">'
+            '<h2>Comparación histórica</h2>'
+            '<p class="muted">'
+            'Comparación contra la ejecución previa comparable '
+            'del mismo motor.'
+            '</p>'
+            '<p>'
+            '<strong>Anterior:</strong> {previous}<br>'
+            '<strong>Actual:</strong> {current}<br>'
+            '<strong>Motor:</strong> {engine}<br>'
+            '<strong>Tendencia general:</strong> {classification}<br>'
+            '<strong>Score:</strong> {score}'
+            '</p>'
+            '<table>'
+            '<thead><tr>'
+            '<th>Métrica</th>'
+            '<th>Anterior</th>'
+            '<th>Actual</th>'
+            '<th>Cambio</th>'
+            '<th>Estado</th>'
+            '</tr></thead>'
+            '<tbody>{rows}</tbody>'
+            '</table>'
+            '<p class="muted">{summary}</p>'
+            '</section>'
+        ).format(
+            previous=html.escape(
+                str(
+                    historical_comparison.get(
+                        "previous_execution_id",
+                        "",
+                    )
+                )
+            ),
+            current=html.escape(
+                str(
+                    historical_comparison.get(
+                        "current_execution_id",
+                        "",
+                    )
+                )
+            ),
+            engine=html.escape(
+                str(
+                    historical_comparison.get(
+                        "engine",
+                        engine_label,
+                    )
+                )
+            ),
+            classification=html.escape(
+                str(
+                    historical_comparison.get(
+                        "classification",
+                        "N/A",
+                    )
+                )
+            ),
+            score=html.escape(
+                str(score_text)
+            ),
+            rows=history_rows,
+            summary=html.escape(
+                str(
+                    historical_comparison.get(
+                        "summary",
+                        "",
+                    )
+                )
+            ),
+        )
+    else:
+        historical_comparison_html = (
+            '<section class="panel pe-history">'
+            '<h2>Comparación histórica</h2>'
+            '<p class="muted">{message}</p>'
+            '</section>'
+        ).format(
+            message=html.escape(
+                str(
+                    historical_comparison.get(
+                        "message",
+                        "No hay ejecuciones previas comparables.",
+                    )
+                )
+            )
+        )
 
     return """<!DOCTYPE html>
 <html lang="es">
@@ -3391,6 +3914,171 @@ tbody tr:last-child td {{
   }}
 }}
 
+
+  /* FINAL_KPI_CLEANUP_V2 */
+
+  .pe-kpi-card {{
+    overflow: hidden;
+  }}
+
+  .pe-kpi-card .card-label {{
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }}
+
+  .pe-kpi-card .card-value {{
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: normal;
+    font-size: clamp(24px, 2.05vw, 36px);
+    line-height: 1.06;
+  }}
+
+  .pe-kpi-card .pe-kpi-caption {{
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }}
+
+  .pe-status-pass {{
+    border-left: 4px solid #22c55e;
+  }}
+
+  .pe-status-pass .card-value {{
+    color: #16a34a;
+  }}
+
+  .pe-status-fail {{
+    border-left: 4px solid #ef4444;
+  }}
+
+  .pe-status-fail .card-value {{
+    color: #dc2626;
+  }}
+
+  .pe-kpi-engine {{
+    border-left: 4px solid #3b82f6;
+  }}
+
+  .pe-kpi-engine .card-value {{
+    color: #2563eb;
+    letter-spacing: .02em;
+  }}
+
+  .pe-kpi-latency {{
+    border-left: 4px solid #8b5cf6;
+  }}
+
+  .pe-kpi-latency .card-value {{
+    color: #7c3aed;
+  }}
+
+  /* FINAL_EXECUTION_DASHBOARD_V1 */
+
+  .pe-kpi-grid {{
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 14px;
+    margin-bottom: 16px;
+  }}
+
+  .pe-kpi-card {{
+    min-width: 0;
+    min-height: 154px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+  }}
+
+  .pe-kpi-card .card-value {{
+    font-size: clamp(22px, 1.9vw, 32px);
+    line-height: 1.08;
+    overflow-wrap: anywhere;
+  }}
+
+  .pe-kpi-caption {{
+    margin-top: 8px;
+    color: var(--theme-muted, var(--muted));
+    font-size: 12px;
+    line-height: 1.35;
+  }}
+
+  .pe-kpi-errors .card-value {{
+    color: var(--red);
+  }}
+
+  .pe-kpi-sla .card-value {{
+    color: var(--green);
+  }}
+
+  .verdict-fail ~ .metadata
+  + .pe-kpi-grid
+  .pe-kpi-sla
+  .card-value {{
+    color: var(--red);
+  }}
+
+  .pe-result-reading {{
+    margin-top: 8px;
+    margin-bottom: 24px;
+  }}
+
+  .pe-result-reading-grid {{
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+  }}
+
+  .pe-result-reading-grid > div {{
+    padding: 18px 20px;
+    border-radius: 14px;
+    border: 1px solid var(--theme-border, var(--border));
+    background: var(--theme-surface-alt, var(--surface));
+  }}
+
+  .pe-result-reading-label {{
+    color: var(--theme-muted, var(--muted));
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+  }}
+
+  .pe-result-reading-value {{
+    margin-top: 6px;
+    font-size: 22px;
+    font-weight: 800;
+  }}
+
+  .pe-result-reading p {{
+    margin: 8px 0 0;
+    color: var(--theme-text-secondary, var(--muted));
+    font-size: 13px;
+    line-height: 1.5;
+  }}
+
+  @media (max-width: 1250px) {{
+    .pe-kpi-grid {{
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }}
+  }}
+
+  @media (max-width: 760px) {{
+    .pe-kpi-grid {{
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }}
+
+    .pe-result-reading-grid {{
+      grid-template-columns: 1fr;
+    }}
+  }}
+
+  @media (max-width: 480px) {{
+    .pe-kpi-grid {{
+      grid-template-columns: 1fr;
+    }}
+  }}
+
 </style>
 
 <script>
@@ -3683,7 +4371,22 @@ tbody tr:last-child td {{
 
     <div class="metadata-item">
       <div class="metadata-label">Objetivo</div>
+      <div class="metadata-value">{objective}</div>
+    </div>
+
+    <div class="metadata-item">
+      <div class="metadata-label">Sistema</div>
+      <div class="metadata-value">{system}</div>
+    </div>
+
+    <div class="metadata-item">
+      <div class="metadata-label">Target</div>
       <div class="metadata-value">{target}</div>
+    </div>
+
+    <div class="metadata-item">
+      <div class="metadata-label">Alcance</div>
+      <div class="metadata-value">{scope_label}</div>
     </div>
 
     <div class="metadata-item">
@@ -3697,30 +4400,138 @@ tbody tr:last-child td {{
     </div>
   </section>
 
-  <section class="cards">
-    <div class="card">
-      <div class="card-label">Solicitudes</div>
-      <div class="card-value">{requests}</div>
+  <section class="cards pe-kpi-grid pe-kpi-primary">
+    <div class="card pe-kpi-card {sla_state_class}">
+      <div class="card-label">Resultado SLA</div>
+      <div class="card-value">{verdict}</div>
+      <div class="pe-kpi-caption">
+        Resultado contra los SLA configurados
+      </div>
     </div>
 
-    <div class="card">
+    <div class="card pe-kpi-card pe-kpi-engine">
+      <div class="card-label">Motor de ejecución</div>
+      <div class="card-value">{engine_label}</div>
+      <div class="pe-kpi-caption">
+        Engine utilizado en la ejecución
+      </div>
+    </div>
+
+    <div class="card pe-kpi-card">
       <div class="card-label">Tasa de éxito</div>
       <div class="card-value">{success_rate}%</div>
+      <div class="pe-kpi-caption">
+        Solicitudes procesadas correctamente
+      </div>
     </div>
 
-    <div class="card">
+    <div class="card pe-kpi-card">
       <div class="card-label">Throughput</div>
       <div class="card-value">{throughput} req/s</div>
+      <div class="pe-kpi-caption">
+        Ritmo promedio observado
+      </div>
     </div>
 
-    <div class="card">
+    <div class="card pe-kpi-card">
       <div class="card-label">p95</div>
       <div class="card-value">{p95} ms</div>
+      <div class="pe-kpi-caption">
+        95% de solicitudes
+      </div>
     </div>
 
-    <div class="card">
+    <div class="card pe-kpi-card">
       <div class="card-label">p99</div>
       <div class="card-value">{p99} ms</div>
+      <div class="pe-kpi-caption">
+        99% de solicitudes
+      </div>
+    </div>
+  </section>
+
+  <section class="cards pe-kpi-grid pe-kpi-secondary">
+    <div class="card pe-kpi-card">
+      <div class="card-label">Solicitudes totales</div>
+      <div class="card-value">{requests}</div>
+      <div class="pe-kpi-caption">
+        Total procesado durante la ejecución
+      </div>
+    </div>
+
+    <div class="card pe-kpi-card pe-status-pass">
+      <div class="card-label">Solicitudes exitosas</div>
+      <div class="card-value">{success_count}</div>
+      <div class="pe-kpi-caption">
+        Requests sin error
+      </div>
+    </div>
+
+    <div class="card pe-kpi-card {failed_state_class}">
+      <div class="card-label">Solicitudes fallidas</div>
+      <div class="card-value">{error_count}</div>
+      <div class="pe-kpi-caption">
+        Requests marcados como error
+      </div>
+    </div>
+
+    <div class="card pe-kpi-card">
+      <div class="card-label">Latencia promedio</div>
+      <div class="card-value">{average_latency} ms</div>
+      <div class="pe-kpi-caption">
+        Tiempo medio de respuesta
+      </div>
+    </div>
+
+    <div class="card pe-kpi-card">
+      <div class="card-label">Latencia máxima</div>
+      <div class="card-value">{maximum_latency} ms</div>
+      <div class="pe-kpi-caption">
+        Mayor tiempo observado
+      </div>
+    </div>
+
+    <div class="card pe-kpi-card pe-kpi-latency">
+      <div class="card-label">p90</div>
+      <div class="card-value">{p90_value} ms</div>
+      <div class="pe-kpi-caption">
+        90% de solicitudes respondieron en este tiempo o menos
+      </div>
+    </div>
+  </section>
+
+  <section class="panel pe-result-reading">
+    <div class="pe-result-reading-grid">
+      <div>
+        <div class="pe-result-reading-label">
+          Lectura del resultado
+        </div>
+
+        <div class="pe-result-reading-value">
+          Resultado SLA: {verdict}
+        </div>
+
+        <p>
+          La evaluación de SLA y la salud funcional son dimensiones
+          distintas. Una ejecución puede obtener PASS en los SLA
+          globales y aun presentar respuestas HTTP con error.
+        </p>
+      </div>
+
+      <div class="pe-result-reading-status">
+        <div class="pe-result-reading-label">
+          Estado funcional
+        </div>
+
+        <div class="pe-result-reading-value">
+          {functional_status}
+        </div>
+
+        <p>
+          {error_count} de {requests} solicitudes presentaron error
+          ({error_rate}%).
+        </p>
+      </div>
     </div>
   </section>
 
@@ -3984,6 +4795,8 @@ tbody tr:last-child td {{
       </tbody>
     </table>
   </section>
+
+  {historical_comparison_html}
 
   <section class="panel pe-recommendations">
     <h2>Recomendaciones</h2>
@@ -5099,19 +5912,9 @@ tbody tr:last-child td {{
       "pe-has-errors"
     );
 
-    const requestsElement =
-      document.querySelector(
-        ".cards "
-        + ".card:nth-child(1) "
-        + ".card-value"
-      );
-
-    const totalRequests =
-      requestsElement
-        ? parseNumber(
-            requestsElement.textContent
-          )
-        : 0;
+    // El total de solicitudes viene del analysis actual.
+    // No depende de la posición visual de ninguna card.
+    const totalRequests = {requests};
 
     const errorRate =
       totalRequests > 0
@@ -5161,11 +5964,44 @@ tbody tr:last-child td {{
 """.format(
         verdict_class=verdict_class,
         verdict=verdict,
+        sla_state_class=sla_state_class,
+        failed_state_class=failed_state_class,
+        engine_label=html.escape(
+            engine_label
+        ),
+        p90_value=format_metric(
+            p90_value,
+            decimals=1,
+        ),
+        error_count=error_count,
+        error_rate=format_metric(
+            error_rate,
+            decimals=2,
+        ),
+        functional_status=html.escape(
+            functional_status
+        ),
+        classification=html.escape(
+            classification
+        ),
         scenario=html.escape(scenario),
+        objective=html.escape(objective),
+        system=html.escape(system),
         target=html.escape(target),
+        scope_label=html.escape(scope_label),
         generated_at=generated_at,
         source=html.escape(str(analysis.get("source", ""))),
         requests=metrics["total_requests"],
+        success_count=success_count,
+        average_latency=format_metric(
+            average_latency,
+            decimals=2,
+        ),
+        maximum_latency=format_metric(
+            maximum_latency,
+            decimals=2,
+        ),
+        transaction_count=transaction_count,
         success_rate=format_metric(
             metrics["success_rate_pct"],
             decimals=3,
@@ -5211,7 +6047,113 @@ tbody tr:last-child td {{
         transaction_error_rows=transaction_error_rows,
         service_dashboard_json=service_dashboard_json,
         recommendations=recommendations_html,
+        historical_comparison_html=historical_comparison_html,
     )
+
+
+
+# HISTORY_TREND_BINDING_V1
+def _history_trend_from_analysis_path(analysis_path: Path) -> dict:
+    path = Path(analysis_path).resolve().parent / "trend.json"
+    if not path.is_file():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    if not isinstance(payload, dict):
+        return {}
+    if not payload.get("previous_execution_id") or not payload.get("current_execution_id"):
+        return {}
+    return payload
+
+
+def _history_change_text(metric: dict) -> str:
+    value = metric.get("percentage_change")
+    if value is None:
+        return "N/A"
+    return f"{float(value):+.2f}%"
+
+
+def _history_state_html(status: str) -> str:
+    status = str(status or "NO_DATA").upper()
+    if status == "IMPROVED":
+        return '<strong class="status-pass">IMPROVED</strong>'
+    if status == "DEGRADED":
+        return '<strong class="status-fail">DEGRADED</strong>'
+    return html.escape(status)
+
+
+def _history_comparison_html(trend: dict, engine_label: str) -> str:
+    metrics = trend.get("metrics") or {}
+    definitions = (
+        ("throughput_req_per_sec", "Throughput", " req/s"),
+        ("p95_ms", "p95", " ms"),
+        ("p99_ms", "p99", " ms"),
+        ("error_rate_pct", "Error rate", " %"),
+    )
+
+    rows = []
+    for key, label, suffix in definitions:
+        metric = metrics.get(key) or {}
+
+        def fmt(value):
+            if value is None:
+                return "N/A"
+            try:
+                return f"{float(value):.2f}{suffix}"
+            except (TypeError, ValueError):
+                return html.escape(str(value))
+
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(label)}</td>"
+            f"<td>{fmt(metric.get('previous'))}</td>"
+            f"<td>{fmt(metric.get('current'))}</td>"
+            f"<td>{html.escape(_history_change_text(metric))}</td>"
+            f"<td>{_history_state_html(metric.get('status'))}</td>"
+            "</tr>"
+        )
+
+    previous_id = html.escape(str(trend.get("previous_execution_id", "")))
+    current_id = html.escape(str(trend.get("current_execution_id", "")))
+    classification = html.escape(str(trend.get("classification", "UNKNOWN")))
+    score = html.escape(str(trend.get("score", "N/A")))
+    summary = html.escape(str(trend.get("summary", "")))
+    engine = html.escape(str(engine_label or "").upper())
+
+    return (
+        '<section class="panel pe-history">'
+        '<h2>Comparación histórica</h2>'
+        '<p class="muted">Comparación contra la ejecución previa comparable del mismo motor.</p>'
+        f'<p><strong>Anterior:</strong> {previous_id}<br>'
+        f'<strong>Actual:</strong> {current_id}<br>'
+        f'<strong>Motor:</strong> {engine}<br>'
+        f'<strong>Tendencia general:</strong> {classification}<br>'
+        f'<strong>Score:</strong> {score}</p>'
+        '<table><thead><tr>'
+        '<th>Métrica</th><th>Anterior</th><th>Actual</th><th>Cambio</th><th>Estado</th>'
+        '</tr></thead><tbody>'
+        + "".join(rows)
+        + '</tbody></table>'
+        + (f'<p class="muted">{summary}</p>' if summary else "")
+        + '</section>'
+    )
+
+
+def _bind_history_to_html(output_html: str, analysis_path: Path, engine_label: str) -> str:
+    trend = _history_trend_from_analysis_path(analysis_path)
+    if not trend:
+        return output_html
+
+    replacement = _history_comparison_html(trend, engine_label)
+    pattern = re.compile(
+        r'<section class="panel pe-history">.*?</section>',
+        re.DOTALL,
+    )
+    if not pattern.search(output_html):
+        return output_html
+    return pattern.sub(replacement, output_html, count=1)
 
 
 def main():
@@ -5255,6 +6197,19 @@ def main():
 
     args = parser.parse_args()
 
+    project_root = (
+        Path(__file__)
+        .resolve()
+        .parents[1]
+    )
+
+    report_scope = resolve_report_scope(
+        project_root=project_root,
+        scenario=args.scenario,
+        explicit_target=args.target,
+    )
+    args.target = report_scope.target
+
     try:
         with args.analysis.open(
             encoding="utf-8"
@@ -5271,6 +6226,20 @@ def main():
             bucket_seconds=args.bucket_seconds,
         )
 
+        historical_comparison = (
+            _load_historical_comparison(
+                analysis_path=args.analysis,
+                current_engine=str(
+                    analysis.get("engine")
+                    or analysis.get(
+                        "metadata",
+                        {},
+                    ).get("engine")
+                    or ""
+                ),
+            )
+        )
+
         output_html = build_html(
             analysis=analysis,
             time_labels=time_labels,
@@ -5278,7 +6247,11 @@ def main():
             throughput_series=throughput_series,
             error_rate_series=error_rate_series,
             scenario=args.scenario,
-            target=args.target,
+            objective=report_scope.objective,
+            system=report_scope.system,
+            target=report_scope.target,
+            scope_label=report_scope.scope_label,
+            historical_comparison=historical_comparison,
         )
 
         args.output.parent.mkdir(
@@ -5286,8 +6259,17 @@ def main():
             exist_ok=True,
         )
 
-        args.output.write_text(
+        output_html = _bind_history_to_html(
             output_html,
+            Path(args.analysis),
+            str(analysis.get("engine") or "JMETER"),
+        )
+
+        args.output.write_text(
+        normalize_report_percentage_precision(
+
+            output_html
+        ),
             encoding="utf-8",
         )
 

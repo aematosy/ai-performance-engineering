@@ -88,3 +88,12 @@ workspaces/
 
 # Generated Locust artifacts
 tests/generated/locust/
+
+# aXet Code local runtime/state
+.axet-code/
+
+# Local safety backups
+.local-backups/
+
+# Generated runtime history snapshots
+history/locust-snapshots/

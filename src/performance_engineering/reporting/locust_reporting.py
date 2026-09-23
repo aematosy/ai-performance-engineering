@@ -2,11 +2,16 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import re
 import subprocess
 import sys
 from pathlib import Path
+
+from performance_engineering.reporting.report_context import (
+    resolve_report_target,
+)
 from typing import Any
 
 from performance_engineering.analysis.locust_analyzer import (
@@ -422,62 +427,28 @@ def _derive_identity(
             metadata.get(
                 "target"
             )
-            or "Not specified"
-        )
+            or ""
+        ).strip()
+
+        if not target:
+            target = resolve_report_target(
+                project_root=ROOT,
+                scenario=scenario,
+            )
 
         return scenario, target
-
-    stats = results / "locust_stats.csv"
 
     scenario = results.name
 
     if scenario.startswith("locust-"):
         scenario = scenario[len("locust-"):]
 
-    target = "Not specified"
-
-    if stats.is_file():
-        with stats.open(
-            newline="",
-            encoding="utf-8-sig",
-        ) as handle:
-            rows = list(
-                csv.DictReader(handle)
-            )
-
-        for row in rows:
-            if (
-                row.get("Name")
-                and row.get("Name")
-                != "Aggregated"
-            ):
-                method = (
-                    row.get("Type")
-                    or ""
-                ).strip()
-
-                name = (
-                    row.get("Name")
-                    or ""
-                ).strip()
-
-                target = (
-                    name
-                    if (
-                        method
-                        and name.upper().startswith(
-                            method.upper() + " "
-                        )
-                    )
-                    else (
-                        f"{method} {name}"
-                    ).strip()
-                )
-
-                break
+    target = resolve_report_target(
+        project_root=ROOT,
+        scenario=scenario,
+    )
 
     return scenario, target
-
 
 
 def _generate_professional_bundle(
@@ -521,6 +492,8 @@ def _generate_professional_bundle(
         target,
         "--html-report",
         str(report_path),
+        "--engine",
+        "LOCUST",
     ]
 
     if (
@@ -575,6 +548,316 @@ def _generate_professional_bundle(
     return pdf
 
 
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _write_report_metadata(
+    *,
+    results: Path,
+    report_dir: Path,
+    report: Path,
+    stats: Path,
+    analysis_path: Path,
+    scenario: str,
+) -> None:
+    execution_metadata_path = results / "metadata.json"
+    execution_metadata: dict[str, Any] = {}
+
+    if execution_metadata_path.is_file():
+        try:
+            payload = json.loads(
+                execution_metadata_path.read_text(encoding="utf-8")
+            )
+            if isinstance(payload, dict):
+                execution_metadata = payload
+        except (OSError, json.JSONDecodeError):
+            execution_metadata = {}
+
+    payload = {
+        "execution_id": execution_metadata.get("execution_id"),
+        "scenario": scenario,
+        "engine": "LOCUST",
+        "results": str(results.resolve()),
+        "source_stats": str(stats.resolve()),
+        "source_stats_sha256": _sha256(stats) if stats.is_file() else None,
+        "analysis": str(analysis_path.resolve()),
+        "analysis_sha256": _sha256(analysis_path) if analysis_path.is_file() else None,
+        "report": str(report.resolve()),
+    }
+
+    (report_dir / "report-metadata.json").write_text(
+        json.dumps(payload, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+
+
+
+# LOCUST_HISTORY_PIPELINE_V2
+def _run_locust_history_pipeline(
+    *,
+    results: Path,
+    analysis_path: Path,
+    scenario: str,
+    target: str,
+) -> None:
+    metadata_path = results / "metadata.json"
+
+    if not metadata_path.is_file():
+        print(
+            "[LOCUST HISTORY] SKIPPED: "
+            f"metadata.json no existe: {metadata_path}"
+        )
+        return
+
+    if not analysis_path.is_file():
+        print(
+            "[LOCUST HISTORY] SKIPPED: "
+            f"analysis.json no existe: {analysis_path}"
+        )
+        return
+
+    try:
+        execution_metadata = json.loads(
+            metadata_path.read_text(encoding="utf-8")
+        )
+        analysis = json.loads(
+            analysis_path.read_text(encoding="utf-8")
+        )
+    except (OSError, json.JSONDecodeError) as exc:
+        print(
+            "[LOCUST HISTORY] SKIPPED: "
+            f"no se pudo leer metadata/analysis: {exc}"
+        )
+        return
+
+    if not isinstance(execution_metadata, dict):
+        print(
+            "[LOCUST HISTORY] SKIPPED: "
+            "metadata.json no contiene un objeto JSON."
+        )
+        return
+
+    if not isinstance(analysis, dict):
+        print(
+            "[LOCUST HISTORY] SKIPPED: "
+            "analysis.json no contiene un objeto JSON."
+        )
+        return
+
+    execution_id = str(
+        execution_metadata.get("execution_id") or ""
+    ).strip()
+
+    if not execution_id:
+        print(
+            "[LOCUST HISTORY] SKIPPED: "
+            "metadata.json no contiene execution_id."
+        )
+        return
+
+    users = execution_metadata.get("users")
+    ramp = execution_metadata.get("ramp_time_seconds")
+    duration = execution_metadata.get("duration_seconds")
+
+    target_hash = hashlib.sha256(
+        target.encode("utf-8")
+    ).hexdigest()[:12]
+
+    history_scenario = (
+        f"{scenario}"
+        f"::LOCUST"
+        f"::users={users}"
+        f"::ramp={ramp}"
+        f"::duration={duration}"
+        f"::target={target_hash}"
+    )
+
+    # Snapshots históricos fuera del results dir operativo.
+    # Locust reutiliza results/locust-<scenario>; por eso un snapshot
+    # dentro de results puede desaparecer en una ejecución posterior.
+    history_snapshot_dir = ROOT / "history" / "locust-snapshots"
+    history_snapshot_dir.mkdir(parents=True, exist_ok=True)
+
+    snapshot_path = (
+        history_snapshot_dir
+        / f"{execution_id}.metadata.json"
+    )
+
+    generated_at = execution_metadata.get("generated_at")
+    if not generated_at:
+        stamp = execution_id.split("-", 1)[0]
+        try:
+            date_part, time_part = stamp[:-1].split("T", 1)
+            hhmmss, fraction = (
+                time_part.split(".", 1)
+                if "." in time_part
+                else (time_part, "")
+            )
+            generated_at = (
+                f"{date_part[0:4]}-{date_part[4:6]}-{date_part[6:8]}"
+                f"T{hhmmss[0:2]}:{hhmmss[2:4]}:{hhmmss[4:6]}"
+                + (f".{fraction}" if fraction else "")
+                + "+00:00"
+            )
+        except (ValueError, IndexError):
+            generated_at = None
+
+    snapshot = {
+        "schema_version": "1.0",
+        "execution_id": execution_id,
+        "generated_at": generated_at,
+        "scenario": history_scenario,
+        "display_scenario": scenario,
+        "engine": "LOCUST",
+        "target": target,
+        "environment": execution_metadata.get("environment", "demo"),
+        "authorized": True,
+        "test_configuration": {
+            "threads": users,
+            "ramp_time_seconds": ramp,
+            "duration_seconds": duration,
+            "prometheus_port": 9271,
+        },
+        "files": {
+            "result_directory": str(results.resolve()),
+            "analysis": str(analysis_path.resolve()),
+            "locust_stats": str(
+                (results / "locust_stats.csv").resolve()
+            ),
+            "locust_stats_history": str(
+                (results / "locust_stats_history.csv").resolve()
+            ),
+        },
+        "technical_errors": [],
+        "verdict": analysis.get("verdict"),
+        "metrics": analysis.get("metrics"),
+        "sla_checks": analysis.get("sla_checks"),
+    }
+
+    temporary = snapshot_path.with_suffix(
+        snapshot_path.suffix + ".tmp"
+    )
+    try:
+        temporary.write_text(
+            json.dumps(snapshot, indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+        temporary.replace(snapshot_path)
+    finally:
+        if temporary.exists():
+            temporary.unlink(missing_ok=True)
+
+    history_manager = ROOT / "scripts" / "history_manager.py"
+    trend_analyzer = ROOT / "scripts" / "trend_analyzer.py"
+    config = ROOT / "config" / "project-config.yaml"
+    trend_path = results / "trend.json"
+
+    if not history_manager.is_file():
+        print(
+            "[LOCUST HISTORY] SKIPPED: "
+            f"no existe {history_manager}"
+        )
+        return
+
+    print()
+    print("=" * 72)
+    print("LOCUST EXECUTION HISTORY")
+    print("=" * 72)
+    print(f"Execution : {execution_id}")
+    print(f"Scenario  : {scenario}")
+    print("Engine    : LOCUST")
+
+    add_result = subprocess.run(
+        [
+            sys.executable,
+            str(history_manager),
+            "--config",
+            str(config),
+            "add",
+            "--metadata",
+            str(snapshot_path),
+        ],
+        cwd=ROOT,
+        check=False,
+    )
+
+    if add_result.returncode != 0:
+        print(
+            "[LOCUST HISTORY] INFO: "
+            "la ejecución puede estar ya registrada; "
+            "se continuará con compare/trend de forma idempotente."
+        )
+
+    comparison_result = subprocess.run(
+        [
+            sys.executable,
+            str(history_manager),
+            "--config",
+            str(config),
+            "compare",
+            "--scenario",
+            history_scenario,
+        ],
+        cwd=ROOT,
+        check=False,
+    )
+
+    trend_path.unlink(missing_ok=True)
+
+    if not trend_analyzer.is_file():
+        print(
+            "[LOCUST HISTORY] WARNING: "
+            f"no existe {trend_analyzer}. "
+            "El reporte continuará sin tendencia."
+        )
+        print("=" * 72)
+        return
+
+    trend_result = subprocess.run(
+        [
+            sys.executable,
+            str(trend_analyzer),
+            "--config",
+            str(config),
+            "--scenario",
+            history_scenario,
+            "--output",
+            str(trend_path),
+        ],
+        cwd=ROOT,
+        check=False,
+    )
+
+    if trend_result.returncode == 0 and trend_path.is_file():
+        print(
+            "[LOCUST HISTORY] Trend disponible: "
+            f"{trend_path}"
+        )
+    elif trend_result.returncode == 1:
+        print(
+            "[LOCUST HISTORY] Sin historial suficiente. "
+            "Ejecución registrada como referencia inicial."
+        )
+    else:
+        print(
+            "[LOCUST HISTORY] WARNING: "
+            f"trend falló con código {trend_result.returncode}. "
+            "El reporte continuará."
+        )
+
+    if comparison_result.returncode != 0:
+        print(
+            "[LOCUST HISTORY] Comparación previa no disponible todavía."
+        )
+
+    print("=" * 72)
+
+
 def generate(
     *,
     results: Path,
@@ -582,6 +865,12 @@ def generate(
     target: str | None,
     open_report: bool,
 ) -> Path:
+    project_root = (
+        Path(__file__)
+        .resolve()
+        .parents[3]
+    )
+
     stats = results / "locust_stats.csv"
     history = (
         results
@@ -657,6 +946,13 @@ def generate(
         )
         + "\n",
         encoding="utf-8",
+    )
+
+    _run_locust_history_pipeline(
+        results=results,
+        analysis_path=analysis_path,
+        scenario=scenario,
+        target=target,
     )
 
     convert_locust_history(
@@ -770,8 +1066,23 @@ def generate(
         workload_path=workload_path,
     )
 
+    _write_report_metadata(
+        results=results,
+        report_dir=report_dir,
+        report=report,
+        stats=stats,
+        analysis_path=analysis_path,
+        scenario=scenario,
+    )
+
     print()
     print("=" * 72)
+    target = resolve_report_target(
+        project_root=project_root,
+        scenario=scenario,
+        explicit_target=target,
+    )
+
     print("COMMON PERFORMANCE REPORT")
     print("=" * 72)
     print("Engine   : LOCUST")
