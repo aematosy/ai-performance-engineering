@@ -16,7 +16,7 @@ class NaturalExecutionHandoffTests(
     ):
         text = (
             ROOT
-            / ".axet/skills/performance-test-runner/SKILL.md"
+            / ".axet-code/skills/performance-test-runner/SKILL.md"
         ).read_text(
             encoding="utf-8"
         )
@@ -31,7 +31,7 @@ class NaturalExecutionHandoffTests(
     ):
         text = (
             ROOT
-            / ".axet/skills/performance-test-runner/SKILL.md"
+            / ".axet-code/skills/performance-test-runner/SKILL.md"
         ).read_text(
             encoding="utf-8"
         )

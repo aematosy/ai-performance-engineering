@@ -483,7 +483,7 @@ Assertions
 Las skills están disponibles en:
 
 ```text
-.axet/skills/
+.axet-code/skills/
 ```
 
 Actualmente:

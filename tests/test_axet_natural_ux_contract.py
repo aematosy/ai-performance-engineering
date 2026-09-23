@@ -63,7 +63,7 @@ class AxetNaturalUXContractTests(unittest.TestCase):
 
     def test_runner_uses_natural_execution(self):
         text = self.read(
-            ".axet/skills/performance-test-runner/SKILL.md"
+            ".axet-code/skills/performance-test-runner/SKILL.md"
         )
 
         self.assertIn(

@@ -1,0 +1,12 @@
+{
+  "schema_version": "1.0",
+  "scenario": "axet-dummyjson-e2e-demo",
+  "status": "APPROVED",
+  "strategy": "NONE",
+  "fields": [],
+  "secrets": [],
+  "scenario_candidate": {
+    "id": "axet-dummyjson-e2e-demo",
+    "type": "SINGLE_REQUEST"
+  }
+}

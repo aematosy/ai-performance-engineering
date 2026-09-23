@@ -76,7 +76,7 @@ def main() -> int:
         for script in REQUIRED_SCRIPTS:
             check_file(f"scripts/{script}")
         for skill in REQUIRED_SKILLS:
-            path = check_file(f".axet/skills/{skill}/SKILL.md")
+            path = check_file(f".axet-code/skills/{skill}/SKILL.md")
             if f"name: {skill}" not in path.read_text(encoding="utf-8"):
                 fail(f"skill:{skill}", "frontmatter name mismatch")
             ok(f"skill:{skill}:frontmatter")
