@@ -5,7 +5,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 SKILL = (
     ROOT
-    / ".gemini"
+    / ".axet"
     / "skills"
     / "performance-test-designer"
     / "SKILL.md"
@@ -13,7 +13,7 @@ SKILL = (
 
 CONTRACT = (
     ROOT
-    / ".gemini"
+    / ".axet"
     / "skills"
     / "performance-test-designer"
     / "references"
@@ -40,8 +40,8 @@ def test_skill_documents_real_curl_public_contract():
     assert '--method "<METHOD>"' in text
     assert '--url "<URL>"' in text
     assert '--header "<Header-Name: value>"' in text
-    assert "--input-type` NO" in text
-    assert "--curl` NO" in text
+    assert "Para Postman NO pasar `--input-type`" in text
+    assert '--curl "<' not in text
 
 
 def test_reference_documents_real_curl_public_contract():

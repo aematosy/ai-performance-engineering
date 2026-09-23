@@ -38,4 +38,4 @@ Add `--require-execution-ready`. The pipeline must fail when the selected contex
 
 ## LLM boundary
 
-Gemini should consume `design-context.json`, not the raw Postman collection, unless diagnosing parser defects. This keeps context small and makes deterministic evidence the source of truth.
+aXet Code should consume `design-context.json`, not the raw Postman collection, unless diagnosing parser defects. This keeps context small and makes deterministic evidence the source of truth.

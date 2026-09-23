@@ -7,7 +7,7 @@ description: Diseña y valida pruebas de Performance Engineering desde APIs, cUR
 
 Esta sección es autoritativa y tiene prioridad sobre cualquier ejemplo anterior.
 
-Para diseño Postman desde Gemini, usar únicamente este front door:
+Para diseño Postman desde aXet Code, usar únicamente este front door:
 
     scripts/natural_performance_design_request.sh
 
@@ -25,7 +25,7 @@ Ejemplo exacto:
 
     ./scripts/natural_performance_design_request.sh       --scenario "restful-booker-e2e-demo"       --collection "inputs/postman/restful-booker/RestFull Booker_test.postman_collection.json"       --environment "inputs/postman/restful-booker/Production RestFull.postman_environment.json"       --users 10       --ramp-time-seconds 100       --duration-seconds 180       --pacing-seconds 2
 
-Nombres inválidos que Gemini NO debe usar:
+Nombres inválidos que aXet Code NO debe usar:
 
     --duration
     --ramp-up
@@ -49,7 +49,7 @@ Reglas:
 
 Esta sección tiene prioridad sobre cualquier instrucción anterior.
 
-Para solicitudes estructuradas provenientes de Gemini, incluyendo:
+Para solicitudes estructuradas provenientes de aXet Code, incluyendo:
 
 - Postman Collection + Environment;
 - cURL;
@@ -57,11 +57,11 @@ Para solicitudes estructuradas provenientes de Gemini, incluyendo:
 - método + URL + headers + body;
 - scenario + workload;
 
-Gemini DEBE usar exclusivamente:
+aXet Code DEBE usar exclusivamente:
 
     scripts/natural_performance_design_request.sh
 
-Gemini NO debe invocar directamente:
+aXet Code NO debe invocar directamente:
 
     scripts/natural_performance_design.sh
 
@@ -98,11 +98,11 @@ Responde en español.
 
 ## Regla principal
 
-Gemini no reconstruye el workflow.
+aXet Code no reconstruye el workflow.
 
-Gemini no ejecuta stages internos directamente.
+aXet Code no ejecuta stages internos directamente.
 
-Gemini usa únicamente el front door público de diseño:
+aXet Code usa únicamente el front door público de diseño:
 
 scripts/natural_performance_design_request.sh
 
@@ -196,7 +196,7 @@ El pipeline determinístico es responsable de:
 - cleanup;
 - readiness.
 
-Gemini interpreta únicamente los artefactos finales producidos.
+aXet Code interpreta únicamente los artefactos finales producidos.
 
 
 ## Validación funcional de contratos Postman
@@ -215,7 +215,7 @@ Esa traversía:
 - debe terminar con todos los contratos HTTP resueltos antes de mostrar el diseño como listo para aprobación.
 
 Si la traversía funcional falla o un contrato permanece sin resolver, el front door falla cerrado.
-Gemini muestra el error y se detiene.
+aXet Code muestra el error y se detiene.
 
 ## Seguridad
 
@@ -256,7 +256,7 @@ Si el front door devuelve error:
 ## Non-interactive runtime secrets
 
 Never ask the user to type passwords, tokens, API keys, client secrets, or
-other runtime secrets into Gemini or into an interactive Shell prompt.
+other runtime secrets into aXet Code or into an interactive Shell prompt.
 
 For Postman input, runtime secrets that are already declared in the source
 collection, collection variables, or environment are materialized

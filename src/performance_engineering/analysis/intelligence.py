@@ -11,7 +11,7 @@ Salidas:
 - intelligence-report.md (opcional)
 
 El motor es determinístico, auditable y no requiere un LLM. Está diseñado
-para que posteriormente pueda enriquecerse con Gemini sin reemplazar las
+para que posteriormente pueda enriquecerse con aXet Code sin reemplazar las
 reglas de seguridad ni la clasificación base.
 """
 

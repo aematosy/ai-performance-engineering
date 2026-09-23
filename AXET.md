@@ -1,8 +1,36 @@
+# aXet Code — Performance Engineering Project Contract
+
+aXet Code is the intelligent interface over this repository.
+
+It is not the technical source of truth.
+
+Deterministic scripts, manifests, hashes, validated artifacts and workflow
+state govern execution.
+
+Mandatory principles:
+
+- Human-in-the-loop.
+- Design is separate from execution.
+- Design is engine-neutral.
+- Engine selection is explicit.
+- JMeter and Locust remain behind common abstractions.
+- Fail closed on deterministic errors.
+- Never silently switch execution engines.
+- Never invent scenarios, endpoints, status codes, workloads or execution IDs.
+- Never bypass approval, authorization, preflight or RUN gates.
+- Never retry through undocumented internal entrypoints after a public
+  deterministic command fails.
+- Reports and summaries must be grounded in deterministic artifacts.
+- Never compare historical results across engines.
+- Never expose secret values.
+
+---
+
 ## EXACT POSTMAN PUBLIC CLI CONTRACT
 
 Esta sección es autoritativa y tiene prioridad sobre cualquier ejemplo anterior.
 
-Para diseño Postman desde Gemini, usar únicamente este front door:
+Para diseño Postman desde aXet Code, usar únicamente este front door:
 
     scripts/natural_performance_design_request.sh
 
@@ -20,7 +48,7 @@ Ejemplo exacto:
 
     ./scripts/natural_performance_design_request.sh       --scenario "restful-booker-e2e-demo"       --collection "inputs/postman/restful-booker/RestFull Booker_test.postman_collection.json"       --environment "inputs/postman/restful-booker/Production RestFull.postman_environment.json"       --users 10       --ramp-time-seconds 100       --duration-seconds 180       --pacing-seconds 2
 
-Nombres inválidos que Gemini NO debe usar:
+Nombres inválidos que aXet Code NO debe usar:
 
     --duration
     --ramp-up
@@ -59,7 +87,7 @@ in their original form.
 5. Never expose credentials, tokens, cookies or Authorization headers.
 6. Preserve execution evidence.
 7. Prefer reproducible and deterministic workflows.
-8. Gemini explains decisions; the platform owns implementation details.
+8. aXet Code explains decisions; the platform owns implementation details.
 
 ## Normal Performance Engineering UX
 
@@ -88,13 +116,13 @@ Execution:
 
 `scripts/natural_performance_execute.sh`
 
-These are the only normal entrypoints Gemini may invoke during a normal
+These are the only normal entrypoints aXet Code may invoke during a normal
 Performance Engineering interaction.
 
 ## Internal Operations
 
 The following are implementation details and MUST NOT be orchestrated manually
-by Gemini during the normal flow:
+by aXet Code during the normal flow:
 
 - approve
 - authorize
@@ -110,7 +138,7 @@ by Gemini during the normal flow:
 - hash manipulation
 - JMX metadata synchronization
 
-Gemini MUST NOT:
+aXet Code MUST NOT:
 
 - construct these commands;
 - inspect `--help` to discover their arguments;

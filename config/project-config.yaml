@@ -11,7 +11,7 @@ runtime:
   jmeter_command: "jmeter"
   docker_command: "docker"
   docker_compose_command: "docker compose"
-  gemini_command: "gemini"
+  axet_command: "axet"
 
 paths:
   config_directory: "config"

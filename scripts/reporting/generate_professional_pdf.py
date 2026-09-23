@@ -916,8 +916,12 @@ def main() -> int:
 
     runtime = JtlMetricsAnalyzer(args.jtl).analyze()
     target = args.target or runtime.get("scope", {}).get("target") or "Aplicación / servicio bajo prueba"
+
+    analysis = load_json(args.analysis)
+    analysis["_analysis_path"] = str(Path(args.analysis).resolve())
+
     generator = ProfessionalPdfReportGenerator(
-        analysis=load_json(args.analysis),
+        analysis=analysis,
         intelligence=load_json(args.intelligence),
         evidence=load_json(args.evidence),
         workload=load_workload(args.workload),
@@ -925,7 +929,7 @@ def main() -> int:
         scenario=args.scenario,
         target=target,
     )
-analysis["_analysis_path"] = str(Path(args.analysis).resolve())
+
     print(generator.build(args.output))
     return 0
 

@@ -4,7 +4,7 @@ Plataforma de **Performance Engineering asistida por IA** diseñada para convert
 
 La plataforma combina:
 
-- **Gemini CLI + Agent Skills** para discovery, diseño e interpretación.
+- **aXet Code + Agent Skills** para discovery, diseño e interpretación.
 - **Python** para los controles determinísticos y el state machine.
 - **Apache JMeter** como motor de carga.
 - **Prometheus + Grafana** para observabilidad en tiempo real.
@@ -26,7 +26,7 @@ El objetivo de la plataforma es transformar una entrada funcional o técnica en 
 Requirement / API / cURL / Postman / JMX
                   │
                   ▼
-        Gemini CLI + Agent Skills
+        aXet Code + Agent Skills
                   │
                   ▼
           Discovery & Intake
@@ -91,7 +91,7 @@ Requirement / API / cURL / Postman / JMX
       Deterministic Intelligence
                   │
                   ▼
-        Gemini Results Analysis
+        aXet Code Results Analysis
                   │
                   ▼
           Engineering Decision
@@ -156,7 +156,7 @@ flowchart TB
 
     USER["User / Performance Engineer"]
 
-    GEMINI["Gemini CLI"]
+    AXET CODE["aXet Code"]
     SKILLS["Agent Skills"]
 
     INPUT["Input Sources<br/>cURL · API · Postman · JMX · Structured CLI"]
@@ -197,10 +197,10 @@ flowchart TB
     HISTORY["History"]
     TREND["Trend Analysis"]
     INTEL["Deterministic Intelligence"]
-    AIRESULTS["Gemini Results Analyst"]
+    AIRESULTS["aXet Code Results Analyst"]
 
-    USER --> GEMINI
-    GEMINI --> SKILLS
+    USER --> AXET CODE
+    AXET CODE --> SKILLS
     SKILLS --> INPUT
     INPUT --> WORKFLOW
 
@@ -257,7 +257,7 @@ flowchart TB
 ┌───────────────────────────────────────────────────────────────┐
 │                    AI INTERACTION LAYER                       │
 │                                                               │
-│  Gemini CLI                                                  │
+│  aXet Code                                                  │
 │  Agent Skills                                                │
 │  Natural-language requirements                               │
 └───────────────────────────┬───────────────────────────────────┘
@@ -318,7 +318,7 @@ flowchart TB
 │  History                                                      │
 │  Trend Analysis                                               │
 │  Deterministic Intelligence                                   │
-│  Gemini Results Analysis                                      │
+│  aXet Code Results Analysis                                      │
 │  Executive Reports                                            │
 └───────────────────────────────────────────────────────────────┘
 ```
@@ -483,7 +483,7 @@ Assertions
 Las skills están disponibles en:
 
 ```text
-.gemini/skills/
+.axet/skills/
 ```
 
 Actualmente:
@@ -534,9 +534,9 @@ deterministic intelligence
 
 Skill de mayor nivel para razonamiento de Performance Engineering, diseño de estrategia y análisis global.
 
-## GEMINI.md
+## AXET.md
 
-`GEMINI.md` contiene las reglas globales de comportamiento del proyecto.
+`AXET.md` contiene las reglas globales de comportamiento del proyecto.
 
 Las skills no deben saltarse las reglas definidas allí.
 
@@ -630,7 +630,7 @@ production credentials
 
 Los secretos deben resolverse durante runtime mediante mecanismos seguros.
 
-La autenticación de Gemini también debe permanecer fuera del repositorio.
+La autenticación de aXet Code también debe permanecer fuera del repositorio.
 
 Nunca incluir credenciales directamente en:
 
@@ -842,10 +842,10 @@ Esto evita ejecutar un JMX diferente al que fue aprobado.
 ├── prometheus.yml
 ├── docker-compose.yml
 │
-├── .gemini/
+├── .axet/
 │   └── skills/
 │
-├── GEMINI.md
+├── AXET.md
 ├── Makefile
 ├── pyproject.toml
 └── poetry.lock
@@ -864,7 +864,7 @@ Java 17+
 Apache JMeter 5.6.x
 Docker
 Docker Compose
-Gemini CLI
+aXet Code
 ```
 
 Versiones utilizadas durante la demo:
@@ -1078,12 +1078,12 @@ localhost:3000
 
 # 19. AI-First Workflow
 
-La manera recomendada de utilizar la plataforma es mediante Gemini CLI.
+La manera recomendada de utilizar la plataforma es mediante aXet Code.
 
 Desde la raíz:
 
 ```bash
-gemini
+axet
 ```
 
 Ejemplo de prompt:
@@ -1108,7 +1108,7 @@ Carga requerida:
 - pacing de 2 segundos
 
 Usa performance-test-designer y sigue completamente su workflow público
-y el state machine definido en GEMINI.md.
+y el state machine definido en AXET.md.
 
 Genera automáticamente los artefactos necesarios.
 
@@ -1117,7 +1117,7 @@ No ejecutes JMeter.
 Detente para mi aprobación cuando review y validation pasen.
 ```
 
-Gemini debe encargarse de:
+aXet Code debe encargarse de:
 
 ```text
 cURL
@@ -1586,7 +1586,7 @@ La decisión determinística no debe ser reemplazada por una inferencia de IA.
 
 # 37. AI Results Analysis
 
-Después de obtener los resultados determinísticos, Gemini puede utilizar:
+Después de obtener los resultados determinísticos, aXet Code puede utilizar:
 
 ```text
 performance-results-analyst
@@ -1889,11 +1889,11 @@ Una demo completa puede seguir este recorrido:
 ```text
 1. Mostrar requisito/cURL.
 
-2. Abrir Gemini CLI.
+2. Abrir aXet Code.
 
 3. Solicitar diseño autónomo.
 
-4. Mostrar cómo Gemini genera:
+4. Mostrar cómo aXet Code genera:
    - normalized model
    - test plan
    - data requirements
@@ -1930,7 +1930,7 @@ Una demo completa puede seguir este recorrido:
 
 15. Mostrar history/trend/intelligence.
 
-16. Pedir a Gemini interpretar los resultados.
+16. Pedir a aXet Code interpretar los resultados.
 ```
 
 ---
@@ -1990,7 +1990,7 @@ open http://localhost:9090
 Después iniciar:
 
 ```bash
-gemini
+axet
 ```
 
 ---

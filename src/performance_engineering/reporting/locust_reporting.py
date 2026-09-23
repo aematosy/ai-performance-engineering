@@ -463,7 +463,7 @@ def _generate_professional_bundle(
 ) -> Path | None:
     builder = (
         ROOT
-        / ".gemini"
+        / ".axet"
         / "skills"
         / "performance-report-interpreter"
         / "scripts"

@@ -7,20 +7,16 @@ ROOT = Path(__file__).resolve().parents[1]
 def test_report_uses_pass_fail_language():
     interpreter = (
         ROOT
-        / ".gemini"
-        / "skills"
-        / "performance-report-interpreter"
         / "scripts"
+        / "reporting"
         / "interpret_results.py"
     ).read_text(encoding="utf-8")
 
     pdf = (
         ROOT
-        / ".gemini"
-        / "skills"
-        / "performance-report-interpreter"
-        / "scripts"
-        / "generate_professional_pdf.py"
+            / "scripts"
+            / "reporting"
+            / "generate_professional_pdf.py"
     ).read_text(encoding="utf-8")
 
     assert '"PASS": "Cumple"' not in interpreter
@@ -65,10 +61,8 @@ def test_html_exposes_execution_semantics():
 def test_recommendations_are_error_aware():
     source = (
         ROOT
-        / ".gemini"
-        / "skills"
-        / "performance-report-interpreter"
         / "scripts"
+        / "reporting"
         / "interpret_results.py"
     ).read_text(encoding="utf-8")
 

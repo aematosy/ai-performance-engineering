@@ -11,7 +11,7 @@ Responde al usuario en español.
 
 El humano aprueba decisiones.
 
-Gemini no orquesta operaciones internas.
+aXet Code no orquesta operaciones internas.
 
 ## Único entrypoint normal de ejecución
 

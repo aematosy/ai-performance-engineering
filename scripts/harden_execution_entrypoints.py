@@ -175,9 +175,9 @@ def main() -> int:
     root = Path(args.root).expanduser().resolve()
     files = {
         'makefile': root / 'Makefile',
-        'contract': root / '.gemini' / 'skills' / 'performance-test-runner' / 'references' / 'execution-contract.md',
-        'skill': root / '.gemini' / 'skills' / 'performance-test-runner' / 'SKILL.md',
-        'gemini': root / 'GEMINI.md',
+        'contract': root / '.axet' / 'skills' / 'performance-test-runner' / 'references' / 'execution-contract.md',
+        'skill': root / '.axet' / 'skills' / 'performance-test-runner' / 'SKILL.md',
+        'axet': root / 'AXET.md',
         'readme': root / 'README.md',
     }
     try:
@@ -187,7 +187,7 @@ def main() -> int:
         patch_makefile(files['makefile'])
         patch_execution_contract(files['contract'])
         patch_runner_skill(files['skill'])
-        patch_guidance_file(files['gemini'])
+        patch_guidance_file(files['axet'])
         patch_guidance_file(files['readme'])
     except (PatchError, OSError) as exc:
         print(f'ENTRYPOINT HARDENING ERROR: {exc}', file=sys.stderr)
@@ -198,7 +198,7 @@ def main() -> int:
     print('Makefile             : UPDATED')
     print('Runner contract      : UPDATED')
     print('Runner skill         : UPDATED')
-    print('GEMINI.md guidance   : UPDATED')
+    print('AXET.md guidance   : UPDATED')
     print('README.md guidance   : UPDATED')
     print('Public --authorized  : REMOVED FROM GUIDANCE')
     print('=' * 72)

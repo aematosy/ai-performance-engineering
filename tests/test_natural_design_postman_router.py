@@ -69,7 +69,7 @@ class NaturalPostmanDesignRouterTests(
     ):
         text = (
             ROOT
-            / ".gemini"
+            / ".axet"
             / "skills"
             / "performance-test-designer"
             / "SKILL.md"

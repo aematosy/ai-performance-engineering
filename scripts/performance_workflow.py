@@ -1654,7 +1654,7 @@ def generate_professional_report_bundle(
 
     builder = (
         project_root
-        / ".gemini"
+        / ".axet"
         / "skills"
         / "performance-report-interpreter"
         / "scripts"

@@ -7,7 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
-class GeminiNaturalUXContractTests(unittest.TestCase):
+class AxetNaturalUXContractTests(unittest.TestCase):
 
     def read(self, relative: str) -> str:
         return (ROOT / relative).read_text(
@@ -15,7 +15,7 @@ class GeminiNaturalUXContractTests(unittest.TestCase):
         )
 
     def test_global_contract_is_compact(self):
-        text = self.read("GEMINI.md")
+        text = self.read("AXET.md")
 
         self.assertLess(
             len(text.splitlines()),
@@ -23,10 +23,10 @@ class GeminiNaturalUXContractTests(unittest.TestCase):
         )
 
     def test_two_natural_entrypoints_exist(self):
-        text = self.read("GEMINI.md")
+        text = self.read("AXET.md")
 
         self.assertIn(
-            "scripts/natural_performance_design.sh",
+            "scripts/natural_performance_design_request.sh",
             text,
         )
 
@@ -36,7 +36,7 @@ class GeminiNaturalUXContractTests(unittest.TestCase):
         )
 
     def test_legacy_public_orchestration_removed(self):
-        text = self.read("GEMINI.md")
+        text = self.read("AXET.md")
 
         forbidden = (
             "## Canonical Public Performance Workflow",
@@ -54,7 +54,7 @@ class GeminiNaturalUXContractTests(unittest.TestCase):
             )
 
     def test_single_functional_request_supported(self):
-        text = self.read("GEMINI.md")
+        text = self.read("AXET.md")
 
         self.assertIn(
             "single functional request",
@@ -63,7 +63,7 @@ class GeminiNaturalUXContractTests(unittest.TestCase):
 
     def test_runner_uses_natural_execution(self):
         text = self.read(
-            ".gemini/skills/performance-test-runner/SKILL.md"
+            ".axet/skills/performance-test-runner/SKILL.md"
         )
 
         self.assertIn(
@@ -72,7 +72,7 @@ class GeminiNaturalUXContractTests(unittest.TestCase):
         )
 
     def test_run_is_final_gate(self):
-        text = self.read("GEMINI.md")
+        text = self.read("AXET.md")
 
         self.assertIn(
             "`RUN`",

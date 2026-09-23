@@ -8,7 +8,7 @@
 
 **Versión:** 1.0  
 **Fecha:** 2026-08-22  
-**Autor:** Gemini CLI Performance Designer
+**Autor:** aXet Code Performance Designer
 
 ---
 

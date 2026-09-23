@@ -11,10 +11,8 @@ class ReportBundleEngineSemanticsTests(unittest.TestCase):
     def test_html_enhancer_preserves_objective_and_target_semantics(self):
         source = (
             ROOT
-            / ".gemini"
-            / "skills"
-            / "performance-report-interpreter"
             / "scripts"
+            / "reporting"
             / "enhance_html_report.py"
         ).read_text(encoding="utf-8")
 
@@ -24,10 +22,8 @@ class ReportBundleEngineSemanticsTests(unittest.TestCase):
     def test_bundle_uses_locust_metrics_port_for_locust(self):
         source = (
             ROOT
-            / ".gemini"
-            / "skills"
-            / "performance-report-interpreter"
             / "scripts"
+            / "reporting"
             / "build_report_bundle.py"
         ).read_text(encoding="utf-8")
 

@@ -3,7 +3,7 @@ metadata:
   version: '1.0'
   description: Performance Test Plan for JSONPlaceholder posts creation API
   created_at: '2026-08-22'
-  author: Gemini CLI Performance Designer
+  author: aXet Code Performance Designer
 status: APPROVED
 objective: Evaluar el comportamiento inicial del endpoint de creación de publicaciones bajo una carga simulada controlada, estableciendo una línea base técnica para posteriores comparaciones.
 system:

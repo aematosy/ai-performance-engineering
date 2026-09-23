@@ -30,7 +30,7 @@ Enter the natural execution flow once.
 
 ENGINE SELECTION happens before RUN.
 
-Gemini never chooses the engine for the user.
+aXet Code never chooses the engine for the user.
 
 RUN is not engine selection.
 

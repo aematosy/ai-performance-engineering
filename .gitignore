@@ -30,13 +30,13 @@ env/
 *.p12
 *.pfx
 
-# Gemini local auth/state
-.gemini/settings.json
-.gemini/google_accounts.json
-.gemini/state.json
-.gemini/projects.json
-.gemini/installation_id
-.gemini/trustedFolders.json
+# aXet Code local auth/state
+.axet/settings.json
+.axet/google_accounts.json
+.axet/state.json
+.axet/projects.json
+.axet/installation_id
+.axet/trustedFolders.json
 
 # Logs
 *.log

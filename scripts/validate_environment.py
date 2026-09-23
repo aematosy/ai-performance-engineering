@@ -87,7 +87,7 @@ def build_tool_definitions(config: ConfigLoader) -> list[ToolDefinition]:
         "docker_compose_command",
         required=True,
     )
-    gemini_command = config.get_command("gemini_command", required=False)
+    axet_command = config.get_command("axet_command", required=False)
 
     assert python_command is not None
     assert jmeter_command is not None
@@ -128,11 +128,11 @@ def build_tool_definitions(config: ConfigLoader) -> list[ToolDefinition]:
         ),
     ]
 
-    if gemini_command:
+    if axet_command:
         tools.append(
             ToolDefinition(
-                name="Gemini CLI",
-                command=[*split_command(gemini_command), "--version"],
+                name="aXet Code",
+                command=[*split_command(axet_command), "--version"],
                 required=False,
             )
         )

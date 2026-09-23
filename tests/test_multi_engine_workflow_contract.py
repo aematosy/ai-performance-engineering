@@ -52,10 +52,10 @@ class MultiEngineWorkflowContractTests(
             text,
         )
 
-    def test_gemini_contract_mentions_jmeter_and_locust(self):
+    def test_axet_contract_mentions_jmeter_and_locust(self):
         text = (
             ROOT
-            / "GEMINI.md"
+            / "AXET.md"
         ).read_text(
             encoding="utf-8"
         ).lower()
@@ -73,7 +73,7 @@ class MultiEngineWorkflowContractTests(
     def test_engine_selection_happens_before_run(self):
         text = (
             ROOT
-            / "GEMINI.md"
+            / "AXET.md"
         ).read_text(
             encoding="utf-8"
         )
@@ -113,7 +113,7 @@ class MultiEngineWorkflowContractTests(
     def test_run_is_not_engine_selection(self):
         text = (
             ROOT
-            / "GEMINI.md"
+            / "AXET.md"
         ).read_text(
             encoding="utf-8"
         ).lower()
@@ -131,7 +131,7 @@ class MultiEngineWorkflowContractTests(
     def test_engine_must_not_change_after_preflight(self):
         text = (
             ROOT
-            / "GEMINI.md"
+            / "AXET.md"
         ).read_text(
             encoding="utf-8"
         ).lower()

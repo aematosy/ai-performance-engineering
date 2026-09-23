@@ -2,7 +2,7 @@
 
 Esta sección es autoritativa y tiene prioridad sobre cualquier ejemplo anterior.
 
-Para diseño Postman desde Gemini, usar únicamente este front door:
+Para diseño Postman desde aXet Code, usar únicamente este front door:
 
     scripts/natural_performance_design_request.sh
 
@@ -20,7 +20,7 @@ Ejemplo exacto:
 
     ./scripts/natural_performance_design_request.sh       --scenario "restful-booker-e2e-demo"       --collection "inputs/postman/restful-booker/RestFull Booker_test.postman_collection.json"       --environment "inputs/postman/restful-booker/Production RestFull.postman_environment.json"       --users 10       --ramp-time-seconds 100       --duration-seconds 180       --pacing-seconds 2
 
-Nombres inválidos que Gemini NO debe usar:
+Nombres inválidos que aXet Code NO debe usar:
 
     --duration
     --ramp-up
@@ -44,7 +44,7 @@ Reglas:
 
 Esta sección tiene prioridad sobre cualquier instrucción anterior.
 
-Para solicitudes estructuradas provenientes de Gemini, incluyendo:
+Para solicitudes estructuradas provenientes de aXet Code, incluyendo:
 
 - Postman Collection + Environment;
 - cURL;
@@ -52,11 +52,11 @@ Para solicitudes estructuradas provenientes de Gemini, incluyendo:
 - método + URL + headers + body;
 - scenario + workload;
 
-Gemini DEBE usar exclusivamente:
+aXet Code DEBE usar exclusivamente:
 
     scripts/natural_performance_design_request.sh
 
-Gemini NO debe invocar directamente:
+aXet Code NO debe invocar directamente:
 
     scripts/natural_performance_design.sh
 
@@ -91,7 +91,7 @@ Un fallo del front door público termina el diseño.
 
 ## Single public front door
 
-Gemini usa solamente:
+aXet Code usa solamente:
 
 scripts/natural_performance_design_request.sh
 
@@ -119,10 +119,10 @@ Reglas:
 - `--body` es opcional.
 - `--input-type` NO pertenece al contrato público.
 - `--curl` NO pertenece al contrato público.
-- Gemini NO materializa manualmente archivos `.curl`.
-- Gemini NO llama `natural_performance_design_http.sh`.
-- Gemini NO llama `natural_performance_design.sh`.
-- Gemini NO llama `performance_workflow.py`.
+- aXet Code NO materializa manualmente archivos `.curl`.
+- aXet Code NO llama `natural_performance_design_http.sh`.
+- aXet Code NO llama `natural_performance_design.sh`.
+- aXet Code NO llama `performance_workflow.py`.
 
 El front door materializa internamente el input cURL y lo enruta al
 intake CLI determinístico.
@@ -148,7 +148,7 @@ El front door posee el routing hacia el workflow Postman determinístico.
 
 ## Forbidden direct commands
 
-Gemini no debe llamar directamente:
+aXet Code no debe llamar directamente:
 
 - performance_workflow.py;
 - natural_performance_design.sh;

@@ -4,7 +4,7 @@ agents:
   chief-performance-engineer:
     enabled: true
     role: "orchestrator"
-    skill_path: ".gemini/skills/chief-performance-engineer/SKILL.md"
+    skill_path: ".axet/skills/chief-performance-engineer/SKILL.md"
     language: "es"
     responsibilities:
       - "coordinar el ciclo completo de Performance Engineering"
@@ -25,7 +25,7 @@ agents:
   performance-test-designer:
     enabled: true
     role: "designer"
-    skill_path: ".gemini/skills/performance-test-designer/SKILL.md"
+    skill_path: ".axet/skills/performance-test-designer/SKILL.md"
     language: "es"
     responsibilities:
       - "realizar discovery"
@@ -42,7 +42,7 @@ agents:
   performance-test-runner:
     enabled: true
     role: "runner"
-    skill_path: ".gemini/skills/performance-test-runner/SKILL.md"
+    skill_path: ".axet/skills/performance-test-runner/SKILL.md"
     language: "es"
     responsibilities:
       - "validar el ambiente"
@@ -61,7 +61,7 @@ agents:
   performance-results-analyst:
     enabled: true
     role: "analyst"
-    skill_path: ".gemini/skills/performance-results-analyst/SKILL.md"
+    skill_path: ".axet/skills/performance-results-analyst/SKILL.md"
     language: "es"
     responsibilities:
       - "interpretar analysis.json"
@@ -79,7 +79,7 @@ agents:
   performance-engineer:
     enabled: true
     role: "specialist"
-    skill_path: ".gemini/skills/performance-engineer/SKILL.md"
+    skill_path: ".axet/skills/performance-engineer/SKILL.md"
     language: "es"
     responsibilities:
       - "revision tecnica especializada"

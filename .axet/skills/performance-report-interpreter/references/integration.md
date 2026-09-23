@@ -4,7 +4,7 @@ Ejemplo recomendado, dejando que el objetivo general se derive del JTL:
 
 ```bash
 poetry run python \
-  .gemini/skills/performance-report-interpreter/scripts/build_report_bundle.py \
+  scripts/reporting/build_report_bundle.py \
   --analysis "$RESULT_DIR/analysis.json" \
   --intelligence "$RESULT_DIR/intelligence.json" \
   --jtl "$RESULT_DIR/results.jtl" \
